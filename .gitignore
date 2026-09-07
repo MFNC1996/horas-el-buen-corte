@@ -1,3 +1,9 @@
 .prueba/
 .claude/
 .DS_Store
+local/datos.sqlite3
+local/datos.sqlite3-*
+local/respaldos/
+local/registro/
+local/vigilante.bat
+local/oculto.vbs

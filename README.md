@@ -2,17 +2,25 @@
 
 Control de horas trabajadas para **Carnicería El Buen Corte, Loncoche**.
 
-Sin servidor propio y sin hosting que se duerma. Hay dos versiones de la misma app:
+Registro de jornadas y cálculo automático de horas extra, para los tres
+trabajadores del local.
 
-| Versión | Dónde vive | Para quién |
-|---|---|---|
-| **Artifact** — `app.html` | [Link fijo en Claude](https://claude.ai/code/artifact/b0f37a93-1360-495e-b641-5429ecd67e97) | Solo tú y tu organización de Claude. Para desarrollar y mostrarle la app al cliente. |
-| **Web** — `docs/index.html` | [mfnc1996.github.io/horas-el-buen-corte](https://mfnc1996.github.io/horas-el-buen-corte/) | El local. Cualquiera con el link, sin cuenta de nada. **Falta conectarle Firebase.** |
+**➡️ Para instalarla, sigue [INSTALAR.md](INSTALAR.md).**
 
-La versión web se genera desde `app.html` con `python3 build-web.py`: la lógica,
-el diseño y las vistas son las mismas, solo cambia de dónde salen los datos.
+La app corre en un computador de la carnicería y los celulares entran por el
+WiFi del local. No depende de ninguna cuenta ni de ningún servicio externo, y
+los datos no salen del negocio.
 
-**Para ponerla en línea, sigue [DESPLIEGUE.md](DESPLIEGUE.md).**
+Hay una sola fuente de verdad — `app.html` — y de ahí salen tres versiones:
+
+| Versión | Se genera con | Dónde vive | Para quién |
+|---|---|---|---|
+| `local/index.html` | `build-local.py` | El computador del local, con `local/servidor.py` | **La que se usa.** Los trabajadores, por WiFi. |
+| `app.html` | — | [Artifact en Claude](https://claude.ai/code/artifact/b0f37a93-1360-495e-b641-5429ecd67e97) | Solo el dueño del proyecto. Para desarrollar y mostrar. |
+| `nube/index.html` | `build-web.py` | Firebase + GitHub Pages | Opcional, si algún día se quiere en internet. Ver [DESPLIEGUE.md](DESPLIEGUE.md). |
+
+La lógica de cálculo, el diseño y las vistas son idénticas en las tres: lo
+único que cambia es de dónde salen los datos.
 
 ---
 
@@ -134,9 +142,12 @@ No es necesario si se usa la app: son dos caminos para lo mismo.
 
 | Archivo | Qué es |
 |---|---|
-| `app.html` | La app. Fuente única de verdad; se publica como artifact. |
-| `build-web.py` | Genera `docs/index.html` desde `app.html`. Falla ruidosamente si algo no calza. |
-| `docs/index.html` | Versión para Firebase + GitHub Pages. **Generado — no editar a mano**, salvo para pegar las claves de Firebase. |
-| `DESPLIEGUE.md` | Cómo dejarla en línea, paso a paso. |
-| `Codigo.gs` | El camino alternativo con Google Sheets. |
-| `.prueba/`, `.claude/launch.json` | Andamiaje local de pruebas (un doble de la base de datos para abrir la app en el navegador sin tocar los datos reales). |
+| `app.html` | La app. **Fuente única**; las otras dos versiones se generan de aquí. |
+| `local/servidor.py` | Servidor del local. Solo librería estándar de Python 3 + SQLite. |
+| `local/index.html` | Cliente para el servidor local. *Generado — no editar a mano.* |
+| `local/instalar-mac.command` · `instalar-windows.bat` | Dejan la app encendida siempre: arranque al prender el equipo y reinicio si se cae. |
+| `build-local.py` · `build-web.py` | Generan las otras versiones desde `app.html`. Fallan ruidosamente si algo no calza. |
+| `INSTALAR.md` | Cómo dejarla andando en el local. **Empieza por aquí.** |
+| `DESPLIEGUE.md` | La opción en la nube, si alguna vez se necesita. |
+| `docs/index.html` | Página de presentación con el link de descarga (GitHub Pages). |
+| `Codigo.gs` | Camino alternativo con Google Forms + Sheets. |

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deriva docs/index.html (version Firebase + GitHub Pages) desde app.html
+Deriva nube/index.html (version Firebase + GitHub Pages) desde app.html
 (version artifact). Toda la logica, el diseno y las vistas se comparten;
 aqui solo se cambia de donde salen los datos y como se baja el CSV.
 
@@ -175,7 +175,7 @@ out = ('<!doctype html>\n<html lang="es">\n<head>\n<meta charset="utf-8">\n'
        + '\n</body>\n</html>\n')
 out = out.replace('</style>', '</style>\n</head>\n<body>', 1)
 
-destino = RAIZ / "docs"
+destino = RAIZ / "nube"
 destino.mkdir(exist_ok=True)
 (destino / "index.html").write_text(out, encoding="utf-8")
-print("docs/index.html generado: %d bytes" % len(out.encode("utf-8")))
+print("nube/index.html generado: %d bytes" % len(out.encode("utf-8")))

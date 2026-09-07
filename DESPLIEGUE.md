@@ -66,7 +66,7 @@ acceso», más abajo.
 > secreto y no hay problema en pasármelas. Lo que protege los datos son las
 > reglas del paso 3, no las claves.
 
-Si prefieres hacerlo tú: en `docs/index.html`, arriba del script, está el
+Si prefieres hacerlo tú: en `nube/index.html`, arriba del script, está el
 bloque `var FIREBASE = {` con seis `PEGA_AQUI_...` para reemplazar.
 
 ---
@@ -104,7 +104,7 @@ Dime si quieres la 2 o la 3 y la implemento.
 
 ## Actualizar la app más adelante
 
-`docs/index.html` no se edita a mano: se genera desde `app.html`, que es la
+`nube/index.html` no se edita a mano: se genera desde `app.html`, que es la
 fuente única. Después de cambiar `app.html`:
 
 ```bash
