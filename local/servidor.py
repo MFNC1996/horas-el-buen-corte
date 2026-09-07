@@ -254,6 +254,11 @@ def elegir_puerto():
     for puerto in range(PUERTO_PREFERIDO, PUERTO_PREFERIDO + 20):
         try:
             s = socket.socket()
+            # Mismo SO_REUSEADDR que usa el servidor real: sin esto, un socket
+            # en TIME_WAIT de un reinicio reciente hace que el sondeo descarte
+            # el 8080 y la app cambie de direccion, dejando inservible el link
+            # que la gente tiene guardado en el celular.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind(("", puerto))
             s.close()
             return puerto
