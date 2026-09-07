@@ -1,50 +1,43 @@
-# Poner la app en línea
+# Estado del despliegue
 
-Objetivo: que los trabajadores abran un link normal desde el celular, sin cuenta
-de nada, y que la app esté siempre disponible.
+## ✅ Hecho — GitHub Pages
 
-- **Firebase Firestore** guarda los datos. Es un servicio administrado: no hay
-  servidor que se duerma ni cold start.
-- **GitHub Pages** sirve el archivo. Es una CDN de archivos estáticos: tampoco
-  se duerme.
+**https://mfnc1996.github.io/horas-el-buen-corte/**
 
-Toma unos 20 minutos la primera vez. Los planes gratuitos cambian, así que
-revisa las cuotas vigentes antes de comprometerte con el cliente.
+Repositorio: https://github.com/MFNC1996/horas-el-buen-corte
+(público, sitio servido desde `main` → `/docs`)
+
+Ya está en línea. Es una CDN de archivos estáticos: no se duerme, no tiene
+cold start. Hoy la página carga completa pero avisa que falta la base de datos.
+
+## ⬜ Falta — Firebase
+
+Es lo único pendiente, y es lo único que **no puedo hacer yo**: requiere crear
+una cuenta e iniciar sesión con contraseña. Además conviene que el proyecto
+quede a nombre del cliente y no mío, porque ahí van a vivir sus datos.
+
+Son unos 10 minutos.
 
 ---
 
-## Parte 1 — Firebase (unos 10 minutos)
+## Los 4 pasos
 
 ### 1. Crear el proyecto
-
 1. Entra a **https://console.firebase.google.com** con la cuenta de Google
    del cliente (o la tuya, y después la transfieres).
-2. **Crear un proyecto** → nombre: `el-buen-corte` → puedes desactivar Google
+2. **Crear un proyecto** → nombre `el-buen-corte` → puedes desactivar Google
    Analytics, no se usa.
 
 ### 2. Crear la base de datos
+1. Menú lateral: **Compilación → Firestore Database → Crear base de datos**.
+2. Elige **modo de producción**.
+   > No elijas modo de prueba: sus reglas caducan a los 30 días y te dejan la
+   > app muerta sin aviso, justo cuando el cliente ya confió en ella.
+3. Ubicación: **`southamerica-east1`** (São Paulo), la más cercana a Chile.
 
-1. En el menú lateral: **Compilación → Firestore Database → Crear base de datos**.
-2. Elige **modo de producción** (las reglas las pones tú en el paso 4; el modo
-   de prueba caduca a los 30 días y te deja la app muerta sin aviso).
-3. Ubicación: `southamerica-east1` (São Paulo) es la más cercana a Chile.
-
-### 3. Registrar la app web y copiar las claves
-
-1. En **Configuración del proyecto** (el engranaje, arriba a la izquierda) baja
-   hasta **Tus apps** y elige el ícono web **`</>`**.
-2. Apodo: `horas` . **No** marques Firebase Hosting.
-3. Te muestra un bloque `firebaseConfig`. Copia esos seis valores.
-4. Abre `docs/index.html`, busca arriba el bloque `var FIREBASE = {` y reemplaza
-   cada `PEGA_AQUI_...` por el valor correspondiente.
-
-> Estas claves **son públicas por diseño**: viajan en el HTML de cualquier app
-> web de Firebase y no son un secreto. Lo que protege los datos son las reglas
-> del paso siguiente.
-
-### 4. Reglas de Firestore
-
-**Compilación → Firestore Database → pestaña Reglas.** Reemplaza todo por:
+### 3. Publicar las reglas
+**Firestore Database → pestaña Reglas.** Reemplaza todo por esto y dale
+**Publicar**:
 
 ```
 rules_version = '2';
@@ -57,78 +50,73 @@ service cloud.firestore {
 }
 ```
 
-**Publicar.**
+Esto deja la base abierta a cualquiera que tenga el link. Ver «Sobre el
+acceso», más abajo.
 
-Esto deja la base abierta a cualquiera que tenga el link — el mismo modelo que
-ya tenías, pero expuesto a internet en vez de a tu organización. Para un local
-de 3 personas con un link que no se publica en ninguna parte es un riesgo bajo,
-pero es un riesgo real: quien consiga la dirección puede leer, escribir y borrar.
-Ver «Si quieres cerrarlo más», al final.
+### 4. Registrar la app web y pasarme las claves
+1. **Configuración del proyecto** (el engranaje, arriba a la izquierda) →
+   baja hasta **Tus apps** → ícono web **`</>`**.
+2. Apodo: `horas`. **No** marques Firebase Hosting.
+3. Te muestra un bloque `firebaseConfig` con seis valores.
 
----
+**Pégamelos en el chat tal cual** y yo los pongo en el archivo y lo publico.
 
-## Parte 2 — GitHub Pages (unos 10 minutos)
+> Estas claves **son públicas por diseño**: viajan en el HTML de cualquier app
+> web de Firebase, cualquiera puede verlas con «ver código fuente». No son un
+> secreto y no hay problema en pasármelas. Lo que protege los datos son las
+> reglas del paso 3, no las claves.
 
-1. Crea una cuenta en **https://github.com** si no tienes.
-2. **New repository** → nombre `horas-el-buen-corte` → **Public** → Create.
-   (Pages gratis necesita repositorio público. Como las claves de Firebase son
-   públicas de todos modos, no cambia nada; lo que importa son las reglas.)
-3. **Add file → Upload files** y sube `docs/index.html`. Que quede en la raíz,
-   con ese nombre exacto: `index.html`.
-4. **Settings → Pages** → en *Source* elige **Deploy from a branch**,
-   rama `main`, carpeta `/ (root)` → **Save**.
-5. Espera 1–2 minutos. Arriba aparece el link:
-   `https://TU-USUARIO.github.io/horas-el-buen-corte/`
-
-Ese es el link que le mandas a los trabajadores.
+Si prefieres hacerlo tú: en `docs/index.html`, arriba del script, está el
+bloque `var FIREBASE = {` con seis `PEGA_AQUI_...` para reemplazar.
 
 ---
 
-## Parte 3 — Dejarla andando
+## Después de eso
 
-1. Abre el link. Debería cargar sin el aviso rojo de «Falta configurar Firebase».
-2. Ve a **Ajustes** y agrega los tres trabajadores con sus nombres reales.
-   La primera vez la lista viene vacía: la app crea todo al primer uso.
+1. Abre el link. Ya no debería salir el aviso rojo.
+2. **Ajustes** → agrega los tres trabajadores con sus nombres reales.
+   La primera vez la lista viene vacía; la app crea todo al primer uso.
 3. Confirma los umbrales (vienen en 8 h al día y 45 h a la semana).
-4. Carga una jornada de prueba y revisa que aparezca en **Resumen**.
-5. Manda el link por WhatsApp. Que cada uno lo guarde en la pantalla de inicio
-   del celular: en Chrome es **⋮ → Agregar a pantalla principal**.
+4. Carga una jornada de prueba y revisa que salga en **Resumen**.
+5. Manda el link por WhatsApp. Que cada uno lo guarde en la pantalla de inicio:
+   en Chrome del celular es **⋮ → Agregar a pantalla principal**.
+
+---
+
+## Sobre el acceso
+
+Con esas reglas, **cualquiera que consiga el link puede leer, escribir y borrar**.
+Para tres personas en Loncoche con un link que no se publica en ninguna parte,
+el riesgo es bajo — pero es real y conviene que sea una decisión tuya, no un
+descuido.
+
+Si quieres cerrarlo:
+
+1. **Nada.** La dirección no está indexada. Probablemente suficiente.
+2. **Un código en la página.** Rápido, pero detiene al curioso y no a alguien
+   que abra el código fuente. No lo presentes como seguridad.
+3. **Firebase Authentication.** La forma correcta: cada trabajador entra con su
+   correo y las reglas exigen sesión iniciada. Más trabajo, y agrega un login.
+
+Dime si quieres la 2 o la 3 y la implemento.
 
 ---
 
 ## Actualizar la app más adelante
 
 `docs/index.html` no se edita a mano: se genera desde `app.html`, que es la
-versión que corre como artifact. Después de cambiar `app.html`:
+fuente única. Después de cambiar `app.html`:
 
 ```bash
-python3 build-web.py
+python3 build-web.py && git add -A && git commit -m "actualiza la app" && git push
 ```
 
-Eso regenera `docs/index.html` con la lógica nueva. Vuelve a pegarle tus claves
-de Firebase y súbelo a GitHub reemplazando el anterior.
+GitHub Pages republica solo en 1–2 minutos. El script se detiene con un error
+si `app.html` cambió tanto que ya no reconoce los bloques que debe reemplazar,
+en vez de generar un archivo roto en silencio.
 
-El script avisa y se detiene si `app.html` cambió tanto que ya no encuentra los
-bloques que tiene que reemplazar, en vez de generar un archivo roto en silencio.
-
----
-
-## Si quieres cerrarlo más
-
-Con las reglas abiertas, cualquiera con la dirección entra. Opciones, de menos
-a más trabajo:
-
-1. **No hacer nada.** La dirección no está indexada ni publicada. Para 3 personas
-   en Loncoche, probablemente suficiente.
-2. **Un código de acceso en la página.** Rápido de agregar, pero honestamente:
-   detiene al curioso, no a alguien que sepa mirar el código fuente. No lo
-   presentes como seguridad.
-3. **Firebase Authentication.** La forma correcta. Cada trabajador entra con su
-   correo o con un enlace mágico, y las reglas exigen sesión iniciada. Es la
-   única que de verdad cierra la puerta. Es más trabajo y agrega un paso de
-   login para los trabajadores.
-
-Si quieres cualquiera de las dos últimas, dime y la implemento.
+> Ojo: `build-web.py` regenera el archivo **con los `PEGA_AQUI_` de vuelta**.
+> Después de correrlo hay que volver a pegar las claves de Firebase.
 
 ---
 
@@ -136,8 +124,8 @@ Si quieres cualquiera de las dos últimas, dime y la implemento.
 
 | Síntoma | Causa probable |
 |---|---|
-| Aviso rojo «Falta configurar Firebase» | Quedó algún `PEGA_AQUI_` sin reemplazar. |
+| «Falta configurar Firebase» | Quedó algún `PEGA_AQUI_` sin reemplazar. |
 | «No se pudo conectar con Firebase» | Claves mal copiadas, o sin internet. |
-| «Las reglas de Firestore no permiten escribir» | Faltó publicar las reglas del paso 4, o caducaron las de modo prueba. |
-| La página carga pero no guarda nada | Mira la consola del navegador (F12 → Console). |
-| GitHub Pages da 404 | El archivo no está en la raíz o no se llama `index.html`. Pages tarda 1–2 min la primera vez. |
+| «Las reglas de Firestore no permiten escribir» | Faltó publicar las reglas del paso 3, o caducaron las de modo prueba. |
+| La página carga pero no guarda | Consola del navegador (F12 → Console). |
+| El link da 404 | Pages tarda 1–2 min en la primera publicación. |

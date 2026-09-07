@@ -7,7 +7,7 @@ Sin servidor propio y sin hosting que se duerma. Hay dos versiones de la misma a
 | Versión | Dónde vive | Para quién |
 |---|---|---|
 | **Artifact** — `app.html` | [Link fijo en Claude](https://claude.ai/code/artifact/b0f37a93-1360-495e-b641-5429ecd67e97) | Solo tú y tu organización de Claude. Para desarrollar y mostrarle la app al cliente. |
-| **Web** — `docs/index.html` | Firebase + GitHub Pages | El local. Cualquiera con el link, sin cuenta de nada. |
+| **Web** — `docs/index.html` | [mfnc1996.github.io/horas-el-buen-corte](https://mfnc1996.github.io/horas-el-buen-corte/) | El local. Cualquiera con el link, sin cuenta de nada. **Falta conectarle Firebase.** |
 
 La versión web se genera desde `app.html` con `python3 build-web.py`: la lógica,
 el diseño y las vistas son las mismas, solo cambia de dónde salen los datos.
