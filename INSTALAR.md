@@ -16,13 +16,27 @@ WiFi. No depende de ningún servicio externo ni de ninguna cuenta.
 1. Descarga el proyecto y descomprímelo en el computador del local.
 2. Entra a la carpeta `local`.
 3. Doble clic en:
-   - **Mac:** `instalar-mac.command`
    - **Windows:** `instalar-windows.bat`
+   - **Mac:** `instalar-mac.command`
 
 Eso deja el servidor encendido y configurado para arrancar solo.
 
-> En Mac, la primera vez macOS puede bloquearlo por venir de internet.
-> Clic derecho sobre el archivo → **Abrir** → **Abrir** de nuevo.
+> **Windows — el paso que más se pasa por alto.** La primera vez, Windows va a
+> preguntar si permite que Python acepte conexiones. **Marca «Redes privadas» y
+> dale «Permitir acceso».** Si le das cancelar, la app va a funcionar en ese
+> computador pero **los celulares no van a poder entrar**, y el síntoma es
+> confuso: parece que la dirección está mala. Para arreglarlo después:
+> Firewall de Windows Defender → Permitir una aplicación → busca Python y
+> marca «Privada».
+
+> **Windows — si dice que no encuentra Python.** Bájalo de
+> [python.org](https://www.python.org/downloads/) y al instalarlo **marca la
+> casilla «Add Python to PATH»**, que está abajo en la primera pantalla y viene
+> desmarcada. El instalador detecta el `python.exe` falso que trae Windows y
+> que solo abre la Microsoft Store, así que si te dice que falta, de verdad falta.
+
+> **Mac.** La primera vez macOS puede bloquear el archivo por venir de internet.
+> Clic derecho sobre él → **Abrir** → **Abrir** de nuevo.
 
 4. Te va a mostrar dos direcciones:
 
@@ -119,7 +133,8 @@ trabajador tenga clave, se puede agregar.
 | Cambió la dirección de números | Usa la `.local`, o pide en el router una reserva de IP para ese computador. |
 | No abre en el propio computador | Abre `local/registro/salida.log` y mira el error. |
 | «No encontré Python» | Instálalo desde python.org. En Windows marca «Add Python to PATH». |
-| Quiero apagarlo | Mac: `desinstalar-mac.command`. Windows: borra `ControlDeHoras.vbs` de la carpeta que se abre escribiendo `shell:startup`. |
+| Los celulares no entran, pero en el PC sí funciona | Windows: es el firewall. Firewall de Windows Defender → Permitir una aplicación → Python → marca «Privada». |
+| Quiero apagarlo | Windows: `desinstalar-windows.bat`. Mac: `desinstalar-mac.command`. |
 
 ## Para quien mantenga el código
 
@@ -134,3 +149,21 @@ python3 build-web.py     # -> nube/index.html   (Firebase, opcional)
 Los dos scripts se detienen con un error si `app.html` cambió tanto que ya no
 reconocen los bloques que deben reemplazar, en vez de generar un archivo roto
 en silencio.
+
+
+---
+
+## Nota sobre las pruebas
+
+Todo lo de este proyecto se desarrolló y se probó en **macOS**: el ciclo
+completo de datos, la sincronización entre dispositivos, el respaldo diario y
+la estabilidad del puerto entre reinicios.
+
+**La parte de Windows está escrita pero no ejecutada en un Windows real.** Se
+revisó contra los problemas típicos (el `python.exe` falso de la Microsoft
+Store, `timeout` fallando en procesos ocultos, la barra final de `%~dp0`, el
+aviso del firewall), pero hasta que no corra en el PC del local es código no
+probado.
+
+Si algo falla ahí, lo más útil es mandar el contenido de
+`local/registro/salida.log`.
