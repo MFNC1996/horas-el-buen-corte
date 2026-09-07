@@ -7,3 +7,5 @@ local/respaldos/
 local/registro/
 local/vigilante.bat
 local/oculto.vbs
+__pycache__/
+*.pyc
