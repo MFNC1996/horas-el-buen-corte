@@ -82,9 +82,13 @@ check("son 4 marcas suyas", len(v.datos.marcas_de(uno, v.datos.estado(uno)["fech
 
 print("\n--- el dia aparece en la lista de jornadas ---")
 check("hay filas en Jornadas", len(v.tv_j.get_children()) >= 1)
+# Los dias incompletos ya no llevan columna de texto: se marcan con el
+# color de la fila (etiqueta "falta").
 incompletos = [i for i in v.tv_j.get_children()
-               if "falta" in str(v.tv_j.item(i)["values"][8])]
+               if "falta" in v.tv_j.item(i)["tags"]]
 check("el dia a medias sale marcado como incompleto", len(incompletos) >= 1)
+check("la fila muestra el valor del dia",
+      "$" in str(v.tv_j.item(v.tv_j.get_children()[0])["values"][-1]))
 
 print("\n--- configuracion: jornada semanal y valor de la hora extra ---")
 v._set(v.e_contrato, "7")
