@@ -44,8 +44,14 @@ class App(tk.Tk):
         primera = self.datos.sembrar_si_vacia()
 
         self.title("Control de Horas  -  El Buen Corte")
-        self.geometry("1120x730")
-        self.minsize(940, 620)
+        # Muchos computadores de local son de 1366x768: la ventana se ajusta
+        # a la pantalla en vez de quedar con el borde de abajo cortado.
+        ancho = min(1120, self.winfo_screenwidth() - 60)
+        alto = min(720, self.winfo_screenheight() - 110)
+        x = max(0, (self.winfo_screenwidth() - ancho) // 2)
+        y = max(0, (self.winfo_screenheight() - alto) // 3)
+        self.geometry("%dx%d+%d+%d" % (ancho, alto, x, y))
+        self.minsize(min(900, ancho), min(560, alto))
         self.configure(bg=PAPEL)
 
         self.editando = None          # id de la jornada en edicion
