@@ -182,6 +182,12 @@ jobs:
           name: ControlDeHoras-Setup
           path: salida/ControlDeHoras-Setup.exe
 
+      - name: Guardar la version portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ControlDeHoras-portable
+          path: dist/ControlDeHoras.exe
+
       - name: Guardar las capturas
         uses: actions/upload-artifact@v4
         with:
@@ -205,5 +211,20 @@ jobs:
 
             Genera el informe mensual en Excel y en PDF, con los turnos
             trabajados, las horas de colacion, las horas extra y lo pagado.
-          files: salida/ControlDeHoras-Setup.exe
+
+            ---
+
+            **`ControlDeHoras-Setup.exe`** es el instalador: deja acceso
+            directo en el Escritorio y se puede desinstalar desde Windows.
+            Es el que conviene usar.
+
+            **`ControlDeHoras.exe`** es la version portable: corre tal cual,
+            sin instalar, tambien desde un pendrive. Util para probarla o
+            para un computador donde no se pueda instalar nada.
+
+            Las dos guardan los datos en el mismo lugar, asi que se pueden
+            alternar sin perder nada.
+          files: |
+            salida/ControlDeHoras-Setup.exe
+            dist/ControlDeHoras.exe
           fail_on_unmatched_files: true
