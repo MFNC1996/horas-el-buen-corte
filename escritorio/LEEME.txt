@@ -1,0 +1,54 @@
+CONTROL DE HORAS  -  Carniceria El Buen Corte, Loncoche
+=======================================================
+
+QUE ES
+------
+Aplicacion para llevar las horas trabajadas de los trabajadores del local
+y sacar el informe mensual para imprimir.
+
+No necesita internet, ni servidor, ni instalar Python: es un programa
+normal de Windows.
+
+
+COMO SE USA
+-----------
+1. TRABAJADORES
+   Ponles el nombre real y cuanto vale su hora normal.
+
+2. CONFIGURACION
+   - Desde cuantas horas se cuenta como extra (viene 8 al dia, 45 a la semana).
+   - Cuanto vale la hora extra. Dos opciones:
+       * Recargo sobre la hora normal (50 % es lo que fija la ley en Chile).
+       * Un monto fijo en pesos que tu escribes.
+     Si eliges monto fijo, cada trabajador puede tener el suyo propio.
+
+3. JORNADAS
+   Cargas la entrada y la salida de cada dia. Para ir mas rapido:
+   el boton "Ahora" pone la hora actual, "+15" y "-15" ajustan de a
+   cuarto de hora, y los botones con horas ponen las mas usadas.
+   Abajo se ve al tiro cuantas horas son y si hay extra.
+
+4. RESUMEN DEL MES
+   Eliges el mes y ves el cuadro completo: turnos, horas, colacion,
+   horas extra y cuanto se paga.
+   Los botones "Exportar a Excel" y "Exportar a PDF" generan el
+   informe listo para imprimir.
+
+
+DONDE QUEDAN LOS DATOS
+----------------------
+En tu carpeta de usuario, no dentro del programa:
+
+    C:\Users\TU-USUARIO\AppData\Local\ControlDeHoras\horas.sqlite3
+
+Por eso puedes instalar una version nueva sin perder nada.
+El boton "Abrir carpeta de datos", en Configuracion, te lleva ahi.
+
+RESPALDO: copia ese archivo a un pendrive de vez en cuando.
+
+
+UN AVISO
+--------
+Los montos que calcula son los que tu configuraste. Es una herramienta
+de control interno: confirma las cifras con tu contador antes de usarlas
+para liquidaciones de sueldo.

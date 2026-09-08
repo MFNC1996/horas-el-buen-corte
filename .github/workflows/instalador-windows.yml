@@ -1,0 +1,115 @@
+name: Instalador de Windows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'escritorio/**'
+      - '.github/workflows/instalador-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  construir:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r escritorio/requisitos.txt pyinstaller==6.11.1
+
+      - name: Probar los calculos
+        run: python escritorio/probar_nucleo.py
+
+      - name: Comprobar que la ventana se puede construir en Windows
+        run: python escritorio/probar_ventana.py
+
+      - name: Construir el .exe
+        run: pyinstaller --noconfirm --clean escritorio/empaquetado/ControlDeHoras.spec
+
+      - name: Abrir la app y sacarle una foto
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\ControlDeHoras.exe" -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) {
+            Write-Error "La aplicacion se cerro sola (codigo $($p.ExitCode))."
+            exit 1
+          }
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $ancho = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width
+          $alto  = [System.Windows.Forms.SystemInformation]::VirtualScreen.Height
+          $bmp = New-Object System.Drawing.Bitmap $ancho, $alto
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen(0, 0, 0, 0, $bmp.Size)
+          New-Item -ItemType Directory -Force -Path capturas | Out-Null
+          $bmp.Save("$PWD\capturas\ventana.png",
+                    [System.Drawing.Imaging.ImageFormat]::Png)
+          Write-Host "La app siguio abierta 15 segundos: arranca bien."
+          Stop-Process -Id $p.Id -Force
+
+      - name: Preparar el LEEME
+        shell: pwsh
+        run: Copy-Item escritorio/LEEME.txt LEEME.txt
+
+      - name: Asegurar Inno Setup
+        run: choco install innosetup -y --no-progress
+        shell: pwsh
+
+      - name: Construir el instalador
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "iscc" }
+          & $iscc escritorio\empaquetado\instalador.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Comprobar que el instalador quedo armado
+        shell: pwsh
+        run: |
+          $i = Get-Item "salida\ControlDeHoras-Setup.exe"
+          $e = Get-Item "dist\ControlDeHoras.exe"
+          Write-Host ("exe:        {0:N1} MB" -f ($e.Length / 1MB))
+          Write-Host ("instalador: {0:N1} MB" -f ($i.Length / 1MB))
+          if ($i.Length -lt 3MB) { Write-Error "El instalador quedo muy chico."; exit 1 }
+
+      - name: Guardar el instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: ControlDeHoras-Setup
+          path: salida/ControlDeHoras-Setup.exe
+
+      - name: Guardar la captura de la ventana
+        uses: actions/upload-artifact@v4
+        with:
+          name: captura-ventana
+          path: capturas/ventana.png
+
+      - name: Publicar la version descargable
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: Control de Horas 1.0.0
+          body: |
+            Aplicacion de escritorio para Windows: control de horas trabajadas
+            de Carniceria El Buen Corte, Loncoche.
+
+            **Descarga `ControlDeHoras-Setup.exe` y dale doble clic.**
+
+            No necesita internet, ni servidor, ni instalar Python.
+            Los datos quedan en tu carpeta de usuario, asi que se puede
+            actualizar la aplicacion sin perder las jornadas registradas.
+
+            Genera el informe mensual en Excel y en PDF, con los turnos
+            trabajados, las horas de colacion, las horas extra y lo pagado.
+          files: salida/ControlDeHoras-Setup.exe
+          fail_on_unmatched_files: true
