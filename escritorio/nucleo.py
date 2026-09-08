@@ -15,9 +15,12 @@ NEGOCIO_DEF = "Carniceria El Buen Corte"
 CIUDAD_DEF = "Loncoche"
 
 CONFIG_DEF = {
-    "umbral_diario": "8",          # solo para destacar dias largos; no define el pago
-    "umbral_semanal": "45",        # jornada semanal legal: de aqui salen las horas extra
-    "regla": "semanal",         # el pago sale del excedente SEMANAL
+    # Jornada del contrato. Lo que se pasa de aqui EN EL DIA es hora extra.
+    "horas_contrato": "7",
+    "umbral_semanal": "45",     # solo como aviso: la ley semanal
+    "dia_cierre": "5",          # dia de pago: 0=lunes ... 5=sabado, 6=domingo
+    "umbral_diario": "7",       # se mantiene por compatibilidad con bases viejas
+    "regla": "diaria",          # el pago sale del excedente DIARIO sobre el contrato
     "modo_extra": "recargo",    # recargo (% sobre la hora normal) | fijo (monto en pesos)
     "recargo_extra": "50",      # % sobre el valor hora, si modo_extra=recargo
     "valor_extra_global": "0",  # $ por hora extra, si modo_extra=fijo
@@ -175,6 +178,7 @@ class Datos(object):
                        nombre     TEXT    NOT NULL,
                        valor_hora REAL    NOT NULL DEFAULT 0,
                        valor_hora_extra REAL NOT NULL DEFAULT 0,
+                       horas_contrato REAL NOT NULL DEFAULT 0,
                        activo     INTEGER NOT NULL DEFAULT 1,
                        orden      INTEGER NOT NULL DEFAULT 0)""")
         c.execute("""CREATE TABLE IF NOT EXISTS jornadas (
@@ -203,6 +207,9 @@ class Datos(object):
         if "valor_hora_extra" not in columnas:
             c.execute("ALTER TABLE trabajadores ADD COLUMN "
                       "valor_hora_extra REAL NOT NULL DEFAULT 0")
+        if "horas_contrato" not in columnas:
+            c.execute("ALTER TABLE trabajadores ADD COLUMN "
+                      "horas_contrato REAL NOT NULL DEFAULT 0")
         c.execute("""CREATE TABLE IF NOT EXISTS config (
                        clave TEXT PRIMARY KEY,
                        valor TEXT NOT NULL)""")
@@ -242,26 +249,30 @@ class Datos(object):
         sql += " ORDER BY orden, id"
         return [dict(f) for f in self.cx.execute(sql)]
 
-    def agregar_trabajador(self, nombre, valor_hora=0, valor_hora_extra=0):
+    def agregar_trabajador(self, nombre, valor_hora=0, valor_hora_extra=0,
+                           horas_contrato=0):
         nombre = (nombre or "").strip()
         if not nombre:
             raise ValueError("El nombre no puede estar vacio.")
         orden = self.cx.execute(
             "SELECT COALESCE(MAX(orden),0)+1 FROM trabajadores").fetchone()[0]
         cur = self.cx.execute(
-            "INSERT INTO trabajadores (nombre, valor_hora, valor_hora_extra, orden) "
-            "VALUES (?,?,?,?)",
-            (nombre, float(valor_hora or 0), float(valor_hora_extra or 0), orden))
+            "INSERT INTO trabajadores (nombre, valor_hora, valor_hora_extra, "
+            "horas_contrato, orden) VALUES (?,?,?,?,?)",
+            (nombre, float(valor_hora or 0), float(valor_hora_extra or 0),
+             float(horas_contrato or 0), orden))
         self.cx.commit()
         return cur.lastrowid
 
-    def editar_trabajador(self, tid, nombre, valor_hora, valor_hora_extra=0):
+    def editar_trabajador(self, tid, nombre, valor_hora, valor_hora_extra=0,
+                          horas_contrato=0):
         nombre = (nombre or "").strip()
         if not nombre:
             raise ValueError("El nombre no puede estar vacio.")
         self.cx.execute("UPDATE trabajadores SET nombre=?, valor_hora=?, "
-                        "valor_hora_extra=? WHERE id=?",
-                        (nombre, float(valor_hora or 0), float(valor_hora_extra or 0), tid))
+                        "valor_hora_extra=?, horas_contrato=? WHERE id=?",
+                        (nombre, float(valor_hora or 0), float(valor_hora_extra or 0),
+                         float(horas_contrato or 0), tid))
         self.cx.commit()
 
     def desactivar_trabajador(self, tid):
@@ -464,6 +475,7 @@ class Datos(object):
                 "nombre": t.get("nombre", "?"),
                 "valor_hora": t.get("valor_hora", 0),
                 "valor_hora_extra": t.get("valor_hora_extra", 0),
+                "horas_contrato": t.get("horas_contrato", 0),
                 "fecha": fecha,
                 "entrada": por_tipo.get("entrada", ""),
                 "salida": por_tipo.get("salida", ""),
@@ -615,202 +627,184 @@ def _limpio(n):
     return t[:-2] if t.endswith(".0") else t
 
 
-# --------------------------------------------------------- resumen del mes
-def _extras_por_semana(jornadas, cfg):
+# ==========================================================================
+#  VALOR DEL DIA
+#  Lo que se pasa de la jornada del contrato EN EL DIA es hora extra.
+#  El valor del dia = horas normales x valor hora + horas extra x valor
+#  hora extra. La semana y el mes son la suma de los dias, asi que
+#  siempre cuadran y el jefe no tiene que sacar cuentas.
+# ==========================================================================
+
+def horas_contrato_de(cfg, trabajador):
+    """Jornada diaria del contrato. La del trabajador manda sobre la general."""
+    propia = float((trabajador or {}).get("horas_contrato") or 0)
+    if propia > 0:
+        return propia
+    try:
+        return float(cfg.get("horas_contrato", 7) or 7)
+    except (TypeError, ValueError):
+        return 7.0
+
+
+def valor_dia(cfg, trabajador, horas):
     """
-    Horas extra de cada semana completa (lunes a domingo), por trabajador,
-    segun la regla configurada.
+    Reparte las horas de un dia entre normales y extra, y les pone precio.
 
-    Devuelve {(lunes, trabajador_id): {'horas':h, 'extra':e, 'por_mes':{...}}}
+    Ejemplo del local: contrato de 7 h, entra 08:30, colacion de 13:30 a
+    14:30, sale 19:30 -> 10 h trabajadas = 7 normales + 3 extra.
     """
-    umbral_d = float(cfg.get("umbral_diario", 8) or 8)
-    umbral_s = float(cfg.get("umbral_semanal", 45) or 45)
-    regla = str(cfg.get("regla", "semanal"))
-
-    semanas = {}
-    for j in jornadas:
-        clave = (lunes_de(j["fecha"]), j["trabajador_id"])
-        s = semanas.setdefault(clave, {"horas": 0.0, "extra_diaria": 0.0,
-                                       "por_mes": {}})
-        h = horas_trabajadas(j["entrada"], j["salida"], j["colacion"])
-        s["horas"] += h
-        s["extra_diaria"] += extra_del_dia(h, umbral_d)
-        s["por_mes"][j["fecha"][:7]] = s["por_mes"].get(j["fecha"][:7], 0.0) + h
-
-    for s in semanas.values():
-        s["horas"] = round(s["horas"], 2)
-        s["extra_diaria"] = round(s["extra_diaria"], 2)
-        s["extra_semanal"] = round(max(0.0, s["horas"] - umbral_s), 2)
-        if regla == "semanal":
-            s["extra"] = s["extra_semanal"]
-        elif regla == "mayor":
-            s["extra"] = max(s["extra_diaria"], s["extra_semanal"])
-        else:
-            s["extra"] = s["extra_diaria"]
-    return semanas
-
-
-def resumen_mensual(datos, anio, mes):
-    """
-    Todo lo que necesita el informe de un mes: por trabajador, sus turnos,
-    horas, colacion, horas extra y cuanto se le paga.
-
-    Las horas extra de las reglas semanales se reparten entre los meses que
-    toca cada semana, en proporcion a las horas de cada mes. Asi las horas
-    ordinarias mas las extra siempre suman las horas del mes, que es lo que
-    tiene que cuadrar en una liquidacion.
-    """
-    cfg = datos.config()
-    ym = "%04d-%02d" % (anio, mes)
-    desde = "%s-01" % ym
-    hasta = "%s-%02d" % (ym, ultimo_dia(anio, mes))
-
-    del_mes = datos.jornadas(desde, hasta)
-
-    # Para las reglas semanales hacen falta las semanas completas, que pueden
-    # empezar el mes anterior o terminar el siguiente.
-    borde_ini = (datetime.strptime(desde, "%Y-%m-%d").date() - timedelta(days=7)).isoformat()
-    borde_fin = (datetime.strptime(hasta, "%Y-%m-%d").date() + timedelta(days=7)).isoformat()
-    semanas = _extras_por_semana(datos.jornadas(borde_ini, borde_fin), cfg)
-
-    extra_mes = {}
-    for (_lunes, tid), s in semanas.items():
-        horas_semana = sum(s["por_mes"].values())
-        if horas_semana <= 0 or s["extra"] <= 0:
-            continue
-        proporcion = s["por_mes"].get(ym, 0.0) / horas_semana
-        extra_mes[tid] = extra_mes.get(tid, 0.0) + s["extra"] * proporcion
-
-    por_trabajador = {}
-    for t in datos.trabajadores(solo_activos=False):
-        por_trabajador[t["id"]] = {
-            "id": t["id"], "nombre": t["nombre"],
-            "valor_hora": float(t["valor_hora"] or 0),
-            "valor_extra": valor_hora_extra(cfg, dict(t)),
-            "turnos": 0, "horas": 0.0, "colacion": 0.0,
-            "detalle": [],
-        }
-
-    for j in del_mes:
-        r = por_trabajador.get(j["trabajador_id"])
-        if r is None:
-            continue
-        h = horas_trabajadas(j["entrada"], j["salida"], j["colacion"])
-        r["turnos"] += 1
-        r["horas"] += h
-        r["colacion"] += int(j["colacion"] or 0) / 60.0
-        r["detalle"].append({
-            "id": j["id"], "fecha": j["fecha"], "dia": nombre_dia(j["fecha"]),
-            "entrada": j["entrada"], "salida": j["salida"],
-            "colacion": int(j["colacion"] or 0), "horas": h,
-            "extra_dia": extra_del_dia(h, float(cfg.get("umbral_diario", 8) or 8)),
-            "nota": j.get("nota", ""),
-        })
-
-    filas = []
-    for r in por_trabajador.values():
-        if not r["turnos"]:
-            continue
-        r["horas"] = round(r["horas"], 2)
-        r["colacion"] = round(r["colacion"], 2)
-        r["extra"] = round(min(extra_mes.get(r["id"], 0.0), r["horas"]), 2)
-        r["ordinarias"] = round(r["horas"] - r["extra"], 2)
-        r["pago_ordinario"] = round(r["ordinarias"] * r["valor_hora"])
-        r["pago_extra"] = round(r["extra"] * r["valor_extra"])
-        r["total"] = r["pago_ordinario"] + r["pago_extra"]
-        r["detalle"].sort(key=lambda d: (d["fecha"], d["entrada"]))
-        filas.append(r)
-
-    filas.sort(key=lambda r: r["nombre"].lower())
-    totales = {
-        "turnos": sum(r["turnos"] for r in filas),
-        "horas": round(sum(r["horas"] for r in filas), 2),
-        "colacion": round(sum(r["colacion"] for r in filas), 2),
-        "ordinarias": round(sum(r["ordinarias"] for r in filas), 2),
-        "extra": round(sum(r["extra"] for r in filas), 2),
-        "pago_ordinario": sum(r["pago_ordinario"] for r in filas),
-        "pago_extra": sum(r["pago_extra"] for r in filas),
-        "total": sum(r["total"] for r in filas),
-    }
+    contrato = horas_contrato_de(cfg, trabajador)
+    horas = round(float(horas or 0), 2)
+    normales = round(min(horas, contrato), 2)
+    extra = round(max(0.0, horas - contrato), 2)
+    v_normal = float((trabajador or {}).get("valor_hora") or 0)
+    v_extra = valor_hora_extra(cfg, trabajador or {})
+    pago_normal = round(normales * v_normal)
+    pago_extra = round(extra * v_extra)
     return {
-        "anio": anio, "mes": mes,
-        "titulo": "%s de %d" % (nombre_mes(mes).capitalize(), anio),
-        "negocio": cfg.get("negocio", NEGOCIO_DEF),
-        "ciudad": cfg.get("ciudad", CIUDAD_DEF),
-        "cfg": cfg, "filas": filas, "totales": totales,
-        "regla_extra": texto_regla_extra(cfg),
-        "umbral_diario": _limpio(cfg.get("umbral_diario", "8")),
-        "umbral_semanal": _limpio(cfg.get("umbral_semanal", "45")),
-        "regla": str(cfg.get("regla", "semanal")),
+        "contrato": contrato, "horas": horas,
+        "normales": normales, "extra": extra,
+        "valor_hora": v_normal, "valor_extra": v_extra,
+        "pago_normal": pago_normal, "pago_extra": pago_extra,
+        "total": pago_normal + pago_extra,
     }
 
 
-# ------------------------------------------------------- resumen de la semana
-def resumen_semanal(datos, lunes):
+def valor_hora_desde_sueldo(sueldo_mensual, horas_semanales):
     """
-    La semana de un vistazo, por trabajador.
+    Valor de la hora ordinaria a partir del sueldo del contrato.
 
-    Es el calculo que define el pago: las horas extra son las que exceden la
-    jornada semanal legal configurada. Que un dia suelto se haya pasado o
-    quedado corto no cambia nada; lo que manda es el total de la semana.
+        sueldo mensual / 30 = sueldo diario
+        sueldo diario x 7   = sueldo semanal
+        sueldo semanal / horas semanales pactadas = valor hora
 
-    Ademas devuelve el detalle dia por dia, como informacion complementaria.
+    Con $553.553 y 42 h semanales da $3.075 la hora.
     """
-    cfg = datos.config()
-    domingo = (datetime.strptime(lunes, "%Y-%m-%d").date() + timedelta(days=6)).isoformat()
-    semanales = float(cfg.get("umbral_semanal", 45) or 45)
+    try:
+        sueldo = float(sueldo_mensual or 0)
+        horas = float(horas_semanales or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if sueldo <= 0 or horas <= 0:
+        return 0.0
+    return round(sueldo / 30.0 * 7.0 / horas)
 
-    dias_por_trab = {}
-    for j in datos.jornadas(lunes, domingo):
-        dias_por_trab.setdefault(j["trabajador_id"], []).append(j)
 
-    filas = []
-    for t in datos.trabajadores(solo_activos=False):
-        dias = sorted(dias_por_trab.get(t["id"], []), key=lambda d: d["fecha"])
-        if not dias:
-            continue
-        horas = round(sum(d["horas"] for d in dias), 2)
-        extra = round(max(0.0, horas - semanales), 2)
-        ordinarias = round(horas - extra, 2)
-        v_extra = valor_hora_extra(cfg, dict(t))
-        incompletos = [d for d in dias if not d["completa"]]
-        filas.append({
-            "id": t["id"], "nombre": t["nombre"],
-            "valor_hora": float(t["valor_hora"] or 0), "valor_extra": v_extra,
-            "dias": dias, "turnos": len(dias),
-            "horas": horas, "ordinarias": ordinarias, "extra": extra,
-            "colacion": round(sum(d["colacion"] for d in dias) / 60.0, 2),
-            "pago_ordinario": round(ordinarias * float(t["valor_hora"] or 0)),
-            "pago_extra": round(extra * v_extra),
-            "incompletos": incompletos,
-        })
-        filas[-1]["total"] = filas[-1]["pago_ordinario"] + filas[-1]["pago_extra"]
-        filas[-1]["detalle"] = dias        # mismo nombre que usa el informe mensual
+# ---------------------------------------------------- semanas de pago
+def dia_cierre_de(cfg):
+    try:
+        d = int(float(cfg.get("dia_cierre", 5)))
+    except (TypeError, ValueError):
+        d = 5
+    return d % 7
 
-    filas.sort(key=lambda f: f["nombre"].lower())
-    totales = {
-        "turnos": sum(f["turnos"] for f in filas),
-        "horas": round(sum(f["horas"] for f in filas), 2),
-        "colacion": round(sum(f["colacion"] for f in filas), 2),
-        "ordinarias": round(sum(f["ordinarias"] for f in filas), 2),
-        "extra": round(sum(f["extra"] for f in filas), 2),
-        "pago_ordinario": sum(f["pago_ordinario"] for f in filas),
-        "pago_extra": sum(f["pago_extra"] for f in filas),
-        "total": sum(f["total"] for f in filas),
-    }
-    return {
-        "lunes": lunes, "domingo": domingo,
-        "titulo": "Semana del %s al %s" % (texto_dia(lunes), texto_dia(domingo)),
-        "semanales": semanales, "cfg": cfg, "filas": filas, "totales": totales,
-        "regla_extra": texto_regla_extra(cfg),
-        "regla": "semanal",
-        "umbral_diario": _limpio(cfg.get("umbral_diario", "8")),
-        "umbral_semanal": _limpio(cfg.get("umbral_semanal", "45")),
-        "negocio": cfg.get("negocio", NEGOCIO_DEF),
-        "ciudad": cfg.get("ciudad", CIUDAD_DEF),
-    }
+
+def semana_de(iso, dia_cierre=5):
+    """
+    Semana de pago que contiene esa fecha: los siete dias que terminan en el
+    dia de pago. Con dia_cierre = sabado, va de domingo a sabado.
+    """
+    d = datetime.strptime(iso, "%Y-%m-%d").date()
+    faltan = (dia_cierre - d.weekday()) % 7
+    cierre = d + timedelta(days=faltan)
+    return (cierre - timedelta(days=6)).isoformat(), cierre.isoformat()
 
 
 def texto_dia(iso):
     d = datetime.strptime(iso, "%Y-%m-%d").date()
-    return "%d de %s" % (d.day, nombre_mes(d.month))
+    return "%s %d de %s" % (DIAS[d.weekday()], d.day, nombre_mes(d.month))
+
+
+# ------------------------------------------------- dias con su valor en pesos
+def dias_con_valor(datos, desde, hasta, tid=None):
+    """Los dias del rango, cada uno con sus horas repartidas y su valor."""
+    cfg = datos.config()
+    trabajadores = dict((t["id"], dict(t))
+                        for t in datos.trabajadores(solo_activos=False))
+    salida = []
+    for j in datos.jornadas(desde, hasta, tid):
+        t = trabajadores.get(j["trabajador_id"], {})
+        d = dict(j)
+        d.update(valor_dia(cfg, t, j["horas"]))
+        d["extra_dia"] = d["extra"]        # nombre que usan los informes
+        salida.append(d)
+    salida.sort(key=lambda x: (x["fecha"], x["nombre"]))
+    return salida
+
+
+def _agrupar(datos, desde, hasta, titulo, subtitulo):
+    """Arma el resumen de un rango cualquiera sumando el valor de cada dia."""
+    cfg = datos.config()
+    dias = dias_con_valor(datos, desde, hasta)
+    por_trab = {}
+    for d in dias:
+        por_trab.setdefault(d["trabajador_id"], []).append(d)
+
+    filas = []
+    for t in datos.trabajadores(solo_activos=False):
+        suyos = por_trab.get(t["id"])
+        if not suyos:
+            continue
+        f = {
+            "id": t["id"], "nombre": t["nombre"],
+            "contrato": horas_contrato_de(cfg, dict(t)),
+            "valor_hora": float(t["valor_hora"] or 0),
+            "valor_extra": valor_hora_extra(cfg, dict(t)),
+            "turnos": len(suyos),
+            "horas": round(sum(d["horas"] for d in suyos), 2),
+            "colacion": round(sum(d["colacion"] for d in suyos) / 60.0, 2),
+            "ordinarias": round(sum(d["normales"] for d in suyos), 2),
+            "extra": round(sum(d["extra"] for d in suyos), 2),
+            "pago_ordinario": sum(d["pago_normal"] for d in suyos),
+            "pago_extra": sum(d["pago_extra"] for d in suyos),
+            "dias": suyos, "detalle": suyos,
+            "incompletos": [d for d in suyos if not d["completa"]],
+        }
+        f["total"] = f["pago_ordinario"] + f["pago_extra"]
+        filas.append(f)
+
+    filas.sort(key=lambda f: f["nombre"].lower())
+    totales = {}
+    for k in ("turnos", "horas", "colacion", "ordinarias", "extra",
+              "pago_ordinario", "pago_extra", "total"):
+        v = sum(f[k] for f in filas)
+        totales[k] = round(v, 2) if isinstance(v, float) else v
+    return {
+        "desde": desde, "hasta": hasta, "titulo": titulo, "subtitulo": subtitulo,
+        "cfg": cfg, "filas": filas, "totales": totales,
+        "regla_extra": texto_regla_extra(cfg),
+        "contrato": _limpio(cfg.get("horas_contrato", "7")),
+        "umbral_semanal": _limpio(cfg.get("umbral_semanal", "45")),
+        "umbral_diario": _limpio(cfg.get("horas_contrato", "7")),
+        "regla": "diaria",
+        "negocio": cfg.get("negocio", NEGOCIO_DEF),
+        "ciudad": cfg.get("ciudad", CIUDAD_DEF),
+    }
+
+
+def resumen_semanal(datos, fecha_dentro):
+    """
+    La semana de pago que contiene esa fecha. Termina en el dia de pago
+    configurado (por defecto el sabado), asi que el total que muestra es
+    justo lo que hay que pagar ese dia.
+    """
+    cfg = datos.config()
+    desde, hasta = semana_de(fecha_dentro, dia_cierre_de(cfg))
+    r = _agrupar(datos, desde, hasta,
+                 "Semana del %s al %s" % (texto_dia(desde), texto_dia(hasta)),
+                 "Se paga el %s" % texto_dia(hasta))
+    r["lunes"] = desde
+    r["domingo"] = hasta
+    r["pago_el"] = hasta
+    return r
+
+
+def resumen_mensual(datos, anio, mes):
+    """El mes completo. Es la suma de los dias, igual que la semana."""
+    desde = "%04d-%02d-01" % (anio, mes)
+    hasta = "%04d-%02d-%02d" % (anio, mes, ultimo_dia(anio, mes))
+    r = _agrupar(datos, desde, hasta,
+                 "%s de %d" % (nombre_mes(mes).capitalize(), anio),
+                 "Mes completo")
+    r["anio"], r["mes"] = anio, mes
+    return r

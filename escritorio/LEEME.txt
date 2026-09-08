@@ -16,8 +16,10 @@ COMO SE USA
    Ponles el nombre real y cuanto vale su hora normal.
 
 2. CONFIGURACION
-   - Horas semanales legales (viene 45). Todo lo que se pase de ahi
-     en la semana se paga como hora extra.
+   - Horas de contrato al dia (viene 7). Todo lo que se pase de ahi
+     EN EL DIA se paga como hora extra.
+   - El dia en que se paga (viene sabado). La semana se acumula sola
+     y cierra ese dia, asi el total que muestra es lo que hay que pagar.
    - Cuanto vale la hora extra. Dos opciones:
        * Recargo sobre la hora normal (50 % es lo que fija la ley en Chile).
        * Un monto fijo en pesos que tu escribes.
@@ -46,11 +48,23 @@ COMO SE USA
    se olvido de marcar o marco a destiempo.
 
 5. RESUMEN Y PAGO
-   Por semana o por mes. Las HORAS EXTRA son las que se pasan de la
-   jornada semanal legal que configuraste: lo que manda es el total de
-   la semana, no si un dia suelto se paso o quedo corto.
+   Cada dia muestra su valor: horas normales por el valor hora, mas las
+   horas extra por el valor de la hora extra.
+
+   Ejemplo del contrato: entra 08:30, colacion de 13:30 a 14:30, sale
+   19:30. Son 10 horas trabajadas = 7 normales + 3 extra.
+   Con la hora a $3.075 y la extra a $3.900:
+       7 x 3.075 = $21.525    3 x 3.900 = $11.700    dia = $33.225
+
+   La semana suma esos valores y cierra el dia de pago, asi que el
+   numero de abajo es lo que hay que pagar. Sin calculadora.
+
    Los botones "Exportar a Excel" y "Exportar a PDF" generan el informe
    listo para imprimir.
+
+   Si no sabes el valor hora, en la pestana Trabajadores hay una
+   calculadora: escribes el sueldo mensual del contrato y las horas
+   semanales pactadas, y te lo saca.
 
 
 DONDE QUEDAN LOS DATOS

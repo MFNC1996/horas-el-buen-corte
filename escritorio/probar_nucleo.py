@@ -69,29 +69,31 @@ anar  = [f for f in r["filas"] if f["nombre"] == "Ana"][0]
 check("Juan turnos", juanr["turnos"], 6)
 check("Juan horas", juanr["horas"], 54.0)
 check("Juan colacion (h)", juanr["colacion"], 6.0)
-# 54 h en una semana con jornada legal de 45 -> 9 extra
-check("Juan extra (regla semanal)", juanr["extra"], 9.0)
-check("Juan ordinarias", juanr["ordinarias"], 45.0)
+# Contrato de 7 h al dia: cada dia de 9 h deja 2 extra.
+check("Juan extra (2 por dia x 6)", juanr["extra"], 12.0)
+check("Juan ordinarias 7 x 6", juanr["ordinarias"], 42.0)
 check("Juan ordinarias+extra = horas", juanr["ordinarias"] + juanr["extra"], juanr["horas"])
-check("Juan pago ordinario 45*3000", juanr["pago_ordinario"], 135000)
-check("Juan pago extra 9*4500", juanr["pago_extra"], 40500)
-check("Juan total", juanr["total"], 175500)
+check("Juan pago ordinario 42*3000", juanr["pago_ordinario"], 126000)
+check("Juan pago extra 12*4500", juanr["pago_extra"], 54000)
+check("Juan total", juanr["total"], 180000)
 check("Ana horas", anar["horas"], 16.0)
-check("Ana sin extra", anar["extra"], 0.0)
-check("Ana total 16*4000", anar["total"], 64000)
-check("total general", r["totales"]["total"], 239500)
+check("Ana extra (1 por dia x 2)", anar["extra"], 2.0)
+check("Ana total 14*4000 + 2*6000", anar["total"], 68000)
+check("total general", r["totales"]["total"], 248000)
 
-print("\n--- el resumen de la semana da lo mismo que el del mes ---")
-sem = N.resumen_semanal(d, "2026-09-07")
+print("\n--- la semana es la suma de sus dias ---")
+sem = N.resumen_semanal(d, "2026-09-08")
 js = [f for f in sem["filas"] if f["nombre"] == "Juan"][0]
-check("misma extra en la vista semanal", js["extra"], 9.0)
-check("mismo pago extra", js["pago_extra"], 40500)
+check("misma extra que en el mes", js["extra"], 12.0)
+check("mismo pago extra", js["pago_extra"], 54000)
 check("detalle de 6 dias", len(js["dias"]), 6)
+check("el total es la suma de los dias",
+      js["total"], sum(x["total"] for x in js["dias"]))
 
-print("\n--- semana a caballo entre dos meses (se reparte) ---")
+print("\n--- semana a caballo entre dos meses ---")
 ruta2 = os.path.join(tempfile.mkdtemp(), "q.sqlite3")
 d2 = N.Datos(ruta2)
-d2.guardar_config({"regla": "semanal", "umbral_semanal": "45"})
+d2.guardar_config({"horas_contrato": "7"})
 p = d2.agregar_trabajador("Pedro", 1000)
 # Semana del 28 sept al 4 oct: 3 dias en septiembre y 3 en octubre, 10 h c/u = 60 h
 for f in ["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03"]:
@@ -100,9 +102,13 @@ sep = [f for f in N.resumen_mensual(d2, 2026, 9)["filas"]][0]
 oct_ = [f for f in N.resumen_mensual(d2, 2026, 10)["filas"]][0]
 check("septiembre 3 turnos", sep["turnos"], 3)
 check("octubre 3 turnos", oct_["turnos"], 3)
-check("extra total repartida = 60-45", round(sep["extra"] + oct_["extra"], 2), 15.0)
+# Cada dia son 10 h con contrato de 7: 3 extra por dia, 9 en cada mes.
+check("septiembre 9 extra", sep["extra"], 9.0)
+check("octubre 9 extra", oct_["extra"], 9.0)
 check("septiembre cuadra", sep["ordinarias"] + sep["extra"], sep["horas"])
 check("octubre cuadra", oct_["ordinarias"] + oct_["extra"], oct_["horas"])
+check("cada mes es la suma de sus dias",
+      sep["total"], sum(x["total"] for x in sep["dias"]))
 
 print("\n--- validaciones ---")
 for nombre, args in [("hora imposible", (juan, "2026-09-22", "entrada", "99:99")),

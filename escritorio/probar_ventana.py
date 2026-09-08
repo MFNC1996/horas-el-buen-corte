@@ -35,7 +35,8 @@ check("Marcar es la primera", pestanas[0] == "Marcar")
 
 print("\n--- controles ---")
 for nombre in ("caja_nombres", "lbl_quien", "lbl_marca", "btn_marcar", "lbl_hoy",
-               "tv_j", "tv_r", "tv_t", "e_us", "e_ud", "e_recargo", "e_vextra",
+               "tv_j", "tv_r", "tv_t", "e_us", "e_contrato", "cb_cierre",
+               "e_recargo", "e_vextra", "e_sueldo", "lbl_total_j",
                "e_negocio", "lbl_reloj"):
     check("existe %s" % nombre, hasattr(v, nombre))
 check("hay 3 trabajadores de ejemplo", len(v.datos.trabajadores()) == 3)
@@ -86,7 +87,9 @@ incompletos = [i for i in v.tv_j.get_children()
 check("el dia a medias sale marcado como incompleto", len(incompletos) >= 1)
 
 print("\n--- configuracion: jornada semanal y valor de la hora extra ---")
-v._set(v.e_us, "44")
+v._set(v.e_contrato, "7")
+v._set(v.e_us, "42")
+v.cb_cierre.current(5)
 v.modo_extra.set("fijo"); v._refrescar_modo()
 check("al elegir monto fijo se habilita su campo",
       str(v.e_vextra.cget("state")) == "normal")
@@ -97,15 +100,25 @@ mb.askyesno = lambda *a, **k: False
 mb.showerror = lambda *a, **k: fallas.append("showerror: " + str(a))
 v.guardar_config()
 c = v.datos.config()
-check("guarda las horas semanales", float(c["umbral_semanal"]) == 44.0)
+check("guarda las horas de contrato", float(c["horas_contrato"]) == 7.0)
+check("guarda las horas semanales", float(c["umbral_semanal"]) == 42.0)
+check("guarda el dia de pago (sabado)", int(float(c["dia_cierre"])) == 5)
 check("guarda el modo", c["modo_extra"] == "fijo")
 check("guarda el valor de la hora extra", float(c["valor_extra_global"]) == 6000.0)
-check("la regla es semanal", c["regla"] == "semanal")
+check("la regla es diaria sobre el contrato", c["regla"] == "diaria")
+
+print("\n--- la calculadora de valor hora ---")
+v._set(v.e_sueldo, "553.553"); v._set(v.e_hsem, "42")
+v.calcular_valor_hora()
+check("553.553 con 42 h da 3.075", v.e_tvalor.get() == "3075")
+check("muestra la formula", "/ 30 x 7 /" in v.lbl_calc.cget("text"))
 
 print("\n--- resumen semanal y mensual ---")
 v.cambiar_periodo("semana")
 check("hay filas en el resumen", len(v.tv_r.get_children()) >= 1)
 check("el titulo dice Semana", "Semana" in v.lbl_periodo.cget("text"))
+check("dice cuando se paga", "SE PAGA EL" in v.lbl_periodo.cget("text"))
+check("muestra la suma de los dias", "suma de los dias" in v.lbl_total_j.cget("text"))
 v.cambiar_periodo("mes")
 check("cambia a mes", "Semana" not in v.lbl_periodo.cget("text"))
 v.cambiar_periodo("semana")

@@ -108,28 +108,63 @@ d.borrar_marca(ci["id"])
 check("pide justo la que falta", d.estado(pepito, H(7, 23))["etiqueta"], "Inicio de colacion")
 d.agregar_marca(pepito, "2026-09-07", "colacion_inicio", "13:00")
 
-print("\n--- horas extra: manda el total de la SEMANA ---")
-d.guardar_config({"umbral_semanal": "45", "modo_extra": "fijo", "valor_extra_global": "5000"})
-sem = N.resumen_semanal(d, "2026-09-07")
-pep = [f for f in sem["filas"] if f["nombre"] == "Pepito"][0]
-check("Pepito: 1 dia de 9 h", pep["horas"], 9.0)
-check("no hay extra con 9 h en la semana", pep["extra"], 0.0)
+print("\n--- el ejemplo exacto del contrato ---")
+# Contrato de 7 h. Entra 08:30, colacion 13:30-14:30, sale 19:30.
+# Son 10 h trabajadas: 7 normales + 3 extra.
+d.guardar_config({"horas_contrato": "7", "modo_extra": "fijo",
+                  "valor_extra_global": "3900", "dia_cierre": "5"})
+isa = d.agregar_trabajador("Isabel", 3075)
+d.agregar_marca(isa, "2026-09-07", "entrada", "08:30")
+d.agregar_marca(isa, "2026-09-07", "colacion_inicio", "13:30")
+d.agregar_marca(isa, "2026-09-07", "colacion_fin", "14:30")
+d.agregar_marca(isa, "2026-09-07", "salida", "19:30")
+dias = N.dias_con_valor(d, "2026-09-07", "2026-09-07", isa)
+uno = dias[0]
+check("10 h trabajadas", uno["horas"], 10.0)
+check("7 normales", uno["normales"], 7.0)
+check("3 extra", uno["extra"], 3.0)
+check("pago normal 7 x 3075", uno["pago_normal"], 21525)
+check("pago extra 3 x 3900", uno["pago_extra"], 11700)
+check("valor del dia", uno["total"], 33225)
 
-otro = d.agregar_trabajador("Recargado", 2000)
-for dia in range(7, 13):                       # 6 dias de 9 h = 54 h
-    d.agregar_marca(otro, "2026-09-%02d" % dia, "entrada", "09:00")
-    d.agregar_marca(otro, "2026-09-%02d" % dia, "colacion_inicio", "13:00")
-    d.agregar_marca(otro, "2026-09-%02d" % dia, "colacion_fin", "14:00")
-    d.agregar_marca(otro, "2026-09-%02d" % dia, "salida", "19:00")
+print("\n--- la jornada justa no genera extra ---")
+d.agregar_marca(isa, "2026-09-08", "entrada", "08:30")
+d.agregar_marca(isa, "2026-09-08", "colacion_inicio", "12:00")
+d.agregar_marca(isa, "2026-09-08", "colacion_fin", "13:00")
+d.agregar_marca(isa, "2026-09-08", "salida", "16:30")
+justo = N.dias_con_valor(d, "2026-09-08", "2026-09-08", isa)[0]
+check("turno del contrato son 7 h", justo["horas"], 7.0)
+check("sin extra", justo["extra"], 0.0)
+check("el dia vale 7 x 3075", justo["total"], 21525)
+
+print("\n--- valor hora desde el sueldo del contrato ---")
+check("553.553 con 42 h semanales", N.valor_hora_desde_sueldo(553553, 42), 3075)
+check("sin sueldo da 0", N.valor_hora_desde_sueldo(0, 42), 0.0)
+
+print("\n--- la semana se acumula sola y cierra el sabado ---")
+check("semana del 7 (lunes)", N.semana_de("2026-09-07", 5), ("2026-09-06", "2026-09-12"))
+check("semana del 12 (sabado)", N.semana_de("2026-09-12", 5), ("2026-09-06", "2026-09-12"))
+check("el domingo 13 ya es otra", N.semana_de("2026-09-13", 5), ("2026-09-13", "2026-09-19"))
 sem = N.resumen_semanal(d, "2026-09-07")
-rec = [f for f in sem["filas"] if f["nombre"] == "Recargado"][0]
-check("54 h en la semana", rec["horas"], 54.0)
-check("extra = 54 - 45", rec["extra"], 9.0)
-check("ordinarias + extra = total", rec["ordinarias"] + rec["extra"], rec["horas"])
-check("pago extra 9 x 5000", rec["pago_extra"], 45000)
-check("colacion de la semana en horas", rec["colacion"], 6.0)
-check("detalle diario presente", len(rec["dias"]), 6)
-check("cada dia son 9 h", rec["dias"][0]["horas"], 9.0)
+isar = [f for f in sem["filas"] if f["nombre"] == "Isabel"][0]
+check("suma los dos dias", isar["turnos"], 2)
+check("horas de la semana", isar["horas"], 17.0)
+check("extra de la semana", isar["extra"], 3.0)
+check("total = suma de los dias", isar["total"], 33225 + 21525)
+check("se paga el sabado", sem["pago_el"], "2026-09-12")
+check("dice cuando se paga", "sabado" in sem["subtitulo"], True)
+
+print("\n--- jornada propia por trabajador ---")
+medio = d.agregar_trabajador("Media jornada", 4000, 5000, 4)   # contrato de 4 h
+d.agregar_marca(medio, "2026-09-09", "entrada", "09:00")
+d.agregar_marca(medio, "2026-09-09", "colacion_inicio", "11:00")
+d.agregar_marca(medio, "2026-09-09", "colacion_fin", "11:30")
+d.agregar_marca(medio, "2026-09-09", "salida", "14:30")
+md = N.dias_con_valor(d, "2026-09-09", "2026-09-09", medio)[0]
+check("5 h trabajadas", md["horas"], 5.0)
+check("su contrato es de 4 h", md["contrato"], 4.0)
+check("1 h extra, no 0", md["extra"], 1.0)
+check("usa su propio valor extra", md["pago_extra"], 5000)
 
 print("\n--- dias incompletos quedan marcados ---")
 suelto = d.agregar_trabajador("Incompleto", 1000)

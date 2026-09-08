@@ -14,9 +14,10 @@ if d.total_marcas():
 for t in d.trabajadores():
     d.desactivar_trabajador(t["id"])
 
-juan = d.agregar_trabajador("Juan Perez", 3000)
-ana = d.agregar_trabajador("Ana Soto", 4000)
-carlos = d.agregar_trabajador("Carlos Mena", 3500)
+# Valor hora sacado del contrato: 553.553 / 30 x 7 / 42 = 3.075
+juan = d.agregar_trabajador("Juan Perez", 3075)
+ana = d.agregar_trabajador("Ana Soto", 3075)
+carlos = d.agregar_trabajador("Carlos Mena", 3075)
 
 def dia(tid, fecha, ent, ci, cf, sal):
     for tipo, hora in (("entrada", ent), ("colacion_inicio", ci),
@@ -24,16 +25,18 @@ def dia(tid, fecha, ent, ci, cf, sal):
         if hora:
             d.agregar_marca(tid, fecha, tipo, hora)
 
-for n in range(7, 13):                                  # Juan: 54 h -> 9 extra
-    dia(juan, "2026-09-%02d" % n, "09:00", "13:00", "14:00", "19:00")
-dia(ana, "2026-09-08", "10:00", "13:30", "14:00", "18:30")
-dia(ana, "2026-09-09", "22:00", "01:00", "01:30", "06:00")   # turno de noche
-dia(ana, "2026-09-10", "10:00", "13:30", "14:00", "18:30")
-dia(carlos, "2026-09-08", "08:00", "13:00", "13:45", "17:00")
-dia(carlos, "2026-09-09", "08:00", "13:00", None, None)      # dia incompleto
-dia(carlos, "2026-09-10", "08:00", "13:00", "14:00", "20:30")
+# Turnos del contrato: 08:30-12:00 y 13:00-16:30, o 11:00-14:30 y 15:30-19:00
+for n, sal in zip(range(7, 13), ["19:30", "16:30", "16:30", "18:30", "16:30", "20:00"]):
+    ci, cf = ("13:30", "14:30") if sal > "17:00" else ("12:00", "13:00")
+    dia(juan, "2026-09-%02d" % n, "08:30", ci, cf, sal)      # varios dias con extra
+for n in range(7, 10):
+    dia(ana, "2026-09-%02d" % n, "11:00", "14:30", "15:30", "19:00")   # justo el contrato
+dia(carlos, "2026-09-08", "08:30", "12:00", "13:00", "16:30")
+dia(carlos, "2026-09-09", "08:30", "12:00", None, None)      # dia incompleto
+dia(carlos, "2026-09-10", "08:30", "13:30", "14:30", "20:30")
 
 d.guardar_config({"negocio": "Carniceria El Buen Corte", "ciudad": "Loncoche",
-                  "umbral_semanal": "45", "modo_extra": "fijo",
-                  "valor_extra_global": "5200"})
+                  "horas_contrato": "7", "umbral_semanal": "42",
+                  "dia_cierre": "5", "modo_extra": "fijo",
+                  "valor_extra_global": "3900"})
 print("sembradas %d marcas en %d dias" % (d.total_marcas(), d.total_jornadas()))

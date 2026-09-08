@@ -2,7 +2,7 @@
 ; Instala la aplicacion, crea accesos directos y deja un desinstalador.
 
 #define Nombre    "Control de Horas"
-#define Version   "1.1.0"
+#define Version   "1.2.0"
 #define Empresa   "El Buen Corte"
 #define Ejecutable "ControlDeHoras.exe"
 

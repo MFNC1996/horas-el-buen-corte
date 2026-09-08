@@ -197,8 +197,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.0
-          name: Control de Horas 1.1.0
+          tag_name: v1.2.0
+          name: Control de Horas 1.2.0
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -215,9 +215,23 @@ jobs:
             alguien marca se suelta la seleccion para que el siguiente no marque
             por error a nombre del anterior.
 
-            Las horas extra son las que se pasan de la jornada semanal legal
-            configurada. El administrador puede corregir a mano cualquier marca
-            desde la pestana Jornadas.
+            ### Valor del dia y acumulado para el pago
+
+            Cada dia muestra cuanto vale: horas normales por el valor hora, mas
+            las horas extra por el valor de la hora extra. Todo lo que se pasa
+            de la jornada del contrato EN EL DIA es hora extra.
+
+            Ejemplo: entra 08:30, colacion de 13:30 a 14:30, sale 19:30. Son 10
+            horas = 7 normales + 3 extra. Con la hora a $3.075 y la extra a
+            $3.900, ese dia vale $33.225.
+
+            La semana acumula esos valores y cierra el dia de pago que elijas
+            (por defecto el sabado), asi que el total que muestra es justo lo que
+            hay que pagar. Sin calculadora.
+
+            Trae ademas una calculadora que saca el valor hora desde el sueldo
+            mensual del contrato, y el administrador puede corregir a mano
+            cualquier marca desde la pestana Jornadas.
 
             **Descarga `ControlDeHoras-Setup.exe` y dale doble clic.**
 

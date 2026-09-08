@@ -268,19 +268,26 @@ class App(tk.Tk):
                  text="Doble clic sobre un dia para corregir sus marcas. Los dias "
                       "a los que les falta alguna marca salen en ambar."
                  ).pack(fill="x", pady=(8, 4))
+        self.lbl_total_j = tk.Label(p, text="", bg=PAPEL, fg=TINTA,
+                                    font=(FUENTE, 12, "bold"), anchor="e")
+        self.lbl_total_j.pack(side="bottom", fill="x", pady=(8, 0))
 
-        cols = ("fecha", "dia", "trab", "e", "ci", "cf", "s", "horas", "estado")
-        titulos = ["Fecha", "Dia", "Trabajador", "Entrada", "Col. inicio",
-                   "Col. fin", "Salida", "Horas", "Estado"]
-        anchos = [88, 82, 150, 74, 82, 74, 70, 66, 170]
+        cols = ("fecha", "dia", "trab", "e", "ci", "cf", "s",
+                "horas", "norm", "extra", "pnorm", "pextra", "total")
+        titulos = ["Fecha", "Dia", "Trabajador", "Entrada", "Col. ini",
+                   "Col. fin", "Salida", "Horas", "Normal", "Extra",
+                   "$ normal", "$ extra", "VALOR DEL DIA"]
+        anchos = [84, 76, 128, 66, 66, 66, 62, 58, 58, 52, 82, 78, 110]
         marco = ttk.Frame(p)
         marco.pack(fill="both", expand=True)
         self.tv_j = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse")
         for c, t, a in zip(cols, titulos, anchos):
             self.tv_j.heading(c, text=t)
-            self.tv_j.column(c, width=a, minwidth=a, stretch=(c in ("trab", "estado")),
-                             anchor="w" if c in ("trab", "estado") else "center")
+            self.tv_j.column(c, width=a, minwidth=a, stretch=(c == "trab"),
+                             anchor="w" if c == "trab" else
+                             ("e" if c in ("pnorm", "pextra", "total") else "center"))
         self.tv_j.tag_configure("falta", background=AMBAR_CLARO, foreground=AMBAR)
+        self.tv_j.tag_configure("conextra", foreground=ROJO)
         sb = ttk.Scrollbar(marco, orient="vertical", command=self.tv_j.yview)
         self.tv_j.configure(yscrollcommand=sb.set)
         self.tv_j.pack(side="left", fill="both", expand=True)
@@ -324,10 +331,12 @@ class App(tk.Tk):
                                   anchor="w", justify="left", wraplength=1040)
         self.lbl_regla.pack(side="bottom", fill="x", pady=(10, 0))
 
-        cols = ("trab", "dias", "horas", "col", "ord", "extra", "vhe", "pext", "total")
-        titulos = ["Trabajador", "Dias", "Horas", "Colacion", "H. ordinarias",
-                   "H. EXTRA", "Valor h. extra", "PAGO EXTRA", "TOTAL"]
-        anchos = [150, 58, 74, 78, 96, 82, 100, 104, 108]
+        cols = ("trab", "dias", "horas", "ord", "extra", "vh", "vhe",
+                "pord", "pext", "total")
+        titulos = ["Trabajador", "Dias", "Horas", "H. normales", "H. EXTRA",
+                   "Valor hora", "Valor h. extra", "$ normales", "$ extra",
+                   "TOTAL A PAGAR"]
+        anchos = [140, 52, 66, 86, 72, 84, 96, 96, 90, 122]
         marco = ttk.Frame(p)
         marco.pack(fill="both", expand=True)
         self.tv_r = ttk.Treeview(marco, columns=cols, show="headings", selectmode="none")
@@ -374,9 +383,28 @@ class App(tk.Tk):
         ttk.Label(f, text="Valor hora extra ($)", style="Rotulo.TLabel").grid(row=0, column=2, sticky="w")
         self.e_tvalorx = ttk.Entry(f, width=13, font=(MONO, 10), justify="right")
         self.e_tvalorx.grid(row=1, column=2, padx=(0, 16), sticky="w")
-        ttk.Label(f, text="solo si en Configuracion elegiste monto fijo;\n"
-                          "en blanco usa el valor general",
-                  style="Rotulo.TLabel").grid(row=1, column=3, sticky="w")
+        ttk.Label(f, text="Horas contrato/dia", style="Rotulo.TLabel").grid(
+            row=0, column=3, sticky="w")
+        self.e_tcontrato = ttk.Entry(f, width=8, font=(MONO, 10), justify="right")
+        self.e_tcontrato.grid(row=1, column=3, padx=(0, 16), sticky="w")
+        ttk.Label(f, text="en blanco usa la general", style="Rotulo.TLabel").grid(
+            row=1, column=4, sticky="w")
+
+        calc = ttk.LabelFrame(p, text=" SACAR EL VALOR HORA DESDE EL SUELDO ", padding=12)
+        calc.pack(fill="x", pady=(12, 0))
+        ttk.Label(calc, text="Sueldo mensual del contrato ($)",
+                  style="Rotulo.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 12))
+        self.e_sueldo = ttk.Entry(calc, width=13, font=(MONO, 10), justify="right")
+        self.e_sueldo.grid(row=1, column=0, padx=(0, 12), sticky="w")
+        ttk.Label(calc, text="Horas semanales pactadas",
+                  style="Rotulo.TLabel").grid(row=0, column=1, sticky="w", padx=(0, 12))
+        self.e_hsem = ttk.Entry(calc, width=8, font=(MONO, 10), justify="right")
+        self.e_hsem.grid(row=1, column=1, padx=(0, 12), sticky="w")
+        ttk.Button(calc, text="Calcular y poner arriba",
+                   command=self.calcular_valor_hora).grid(row=1, column=2, padx=(0, 12))
+        self.lbl_calc = tk.Label(calc, text="", bg=PAPEL, fg=SUAVE,
+                                 font=(FUENTE, 9), justify="left", anchor="w")
+        self.lbl_calc.grid(row=1, column=3, sticky="w")
         b = ttk.Frame(f)
         b.grid(row=2, column=0, columnspan=4, sticky="w", pady=(12, 0))
         ttk.Button(b, text="Agregar nuevo", style="Principal.TButton",
@@ -388,11 +416,12 @@ class App(tk.Tk):
 
         marco = ttk.LabelFrame(p, text=" TRABAJADORES ", padding=10)
         marco.pack(fill="both", expand=True, pady=(14, 0))
-        cols = ("nombre", "vh", "vhe", "dias")
+        cols = ("nombre", "vh", "vhe", "contrato", "dias")
         self.tv_t = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse")
         for c, t, a, al in zip(cols, ["Nombre", "Valor hora", "Valor hora extra",
-                                      "Dias trabajados"],
-                               [230, 130, 150, 130], ["w", "e", "e", "e"]):
+                                      "Contrato (h/dia)", "Dias trabajados"],
+                               [200, 120, 140, 130, 120],
+                               ["w", "e", "e", "e", "e"]):
             self.tv_t.heading(c, text=t)
             self.tv_t.column(c, width=a, anchor=al)
         self.tv_t.pack(fill="both", expand=True)
@@ -403,17 +432,26 @@ class App(tk.Tk):
         p = ttk.Frame(self, padding=14)
         self.tabs.add(p, text="  Configuracion  ")
 
-        a = ttk.LabelFrame(p, text=" JORNADA SEMANAL LEGAL ", padding=14)
+        a = ttk.LabelFrame(p, text=" JORNADA Y DIA DE PAGO ", padding=14)
         a.pack(fill="x")
-        ttk.Label(a, text="Horas semanales", style="Rotulo.TLabel").grid(
-            row=0, column=0, sticky="w", padx=(0, 12))
-        self.e_us = ttk.Entry(a, width=9, font=(MONO, 10), justify="right")
-        self.e_us.grid(row=1, column=0, padx=(0, 12), sticky="w")
+        ttk.Label(a, text="Horas de contrato al dia", style="Rotulo.TLabel").grid(
+            row=0, column=0, sticky="w", padx=(0, 14), pady=(0, 2))
+        self.e_contrato = ttk.Entry(a, width=8, font=(MONO, 10), justify="right")
+        self.e_contrato.grid(row=1, column=0, padx=(0, 14), sticky="nw")
+        ttk.Label(a, text="Se paga el dia", style="Rotulo.TLabel").grid(
+            row=0, column=1, sticky="w", padx=(0, 14), pady=(0, 2))
+        self.cb_cierre = ttk.Combobox(a, state="readonly", width=11, font=(FUENTE, 10),
+                                      values=[d.capitalize() for d in N.DIAS])
+        self.cb_cierre.grid(row=1, column=1, padx=(0, 14), sticky="nw")
+        ttk.Label(a, text="Horas semanales (informativo)", style="Rotulo.TLabel").grid(
+            row=0, column=2, sticky="w", padx=(0, 14), pady=(0, 2))
+        self.e_us = ttk.Entry(a, width=8, font=(MONO, 10), justify="right")
+        self.e_us.grid(row=1, column=2, padx=(0, 14), sticky="nw")
         tk.Label(a, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), justify="left", anchor="w",
-                 text="Todo lo que un trabajador haga por sobre estas horas EN LA SEMANA\n"
-                      "se paga como hora extra. Que un dia suelto se pase o quede corto\n"
-                      "no cambia el pago: lo que manda es el total semanal."
-                 ).grid(row=1, column=1, sticky="w")
+                 text="Todo lo que se pase de las horas de contrato EN EL DIA es hora extra.\n"
+                      "La semana se acumula sola y cierra el dia de pago que elijas, para que\n"
+                      "el total que muestra sea justo lo que hay que pagar ese dia."
+                 ).grid(row=1, column=3, sticky="nw")
 
         b = ttk.LabelFrame(p, text=" CUANTO VALE UNA HORA EXTRA ", padding=14)
         b.pack(fill="x", pady=(14, 0))
@@ -444,10 +482,7 @@ class App(tk.Tk):
         ttk.Label(c, text="Ciudad", style="Rotulo.TLabel").grid(row=0, column=1, sticky="w")
         self.e_ciudad = ttk.Entry(c, width=20, font=(FUENTE, 11))
         self.e_ciudad.grid(row=1, column=1, padx=(0, 20), sticky="w")
-        ttk.Label(c, text="Jornada larga a destacar (h)", style="Rotulo.TLabel").grid(
-            row=0, column=2, sticky="w")
-        self.e_ud = ttk.Entry(c, width=8, font=(MONO, 10), justify="right")
-        self.e_ud.grid(row=1, column=2, sticky="w")
+
 
         pie = ttk.Frame(p)
         pie.pack(fill="x", pady=(16, 0))
@@ -508,12 +543,31 @@ class App(tk.Tk):
         try:
             self.datos.agregar_trabajador(self.e_tnombre.get(),
                                           self._numero(self.e_tvalor.get()),
-                                          self._numero(self.e_tvalorx.get()))
+                                          self._numero(self.e_tvalorx.get()),
+                                          self._numero(self.e_tcontrato.get()))
         except ValueError as e:
             return messagebox.showerror("No se pudo agregar", str(e))
-        for c in (self.e_tnombre, self.e_tvalor, self.e_tvalorx):
+        for c in (self.e_tnombre, self.e_tvalor, self.e_tvalorx, self.e_tcontrato):
             self._set(c, "")
         self.recargar_todo()
+
+    def calcular_valor_hora(self):
+        """sueldo / 30 x 7 / horas semanales = valor de la hora ordinaria."""
+        try:
+            sueldo = self._numero(self.e_sueldo.get())
+            horas = self._numero(self.e_hsem.get())
+        except ValueError as e:
+            return messagebox.showerror("Dato invalido", str(e))
+        v = N.valor_hora_desde_sueldo(sueldo, horas)
+        if not v:
+            return messagebox.showinfo(
+                "Faltan datos",
+                "Escribe el sueldo mensual y las horas semanales del contrato.")
+        self._set(self.e_tvalor, "%d" % v)
+        self.lbl_calc.config(
+            text="%s / 30 x 7 / %s h  =  %s la hora\n"
+                 "Puesto arriba en 'Valor hora normal'. Confirmalo con tu contador."
+                 % (N.pesos(sueldo), N._limpio(horas), N.pesos(v)))
 
     def guardar_trabajador(self):
         sel = self.tv_t.selection()
@@ -523,7 +577,8 @@ class App(tk.Tk):
         try:
             self.datos.editar_trabajador(int(sel[0]), self.e_tnombre.get(),
                                          self._numero(self.e_tvalor.get()),
-                                         self._numero(self.e_tvalorx.get()))
+                                         self._numero(self.e_tvalorx.get()),
+                                         self._numero(self.e_tcontrato.get()))
         except ValueError as e:
             return messagebox.showerror("No se pudo guardar", str(e))
         self.recargar_todo()
@@ -547,9 +602,11 @@ class App(tk.Tk):
     def guardar_config(self):
         try:
             cambios = {
+                "horas_contrato": self._numero(self.e_contrato.get()) or 7,
                 "umbral_semanal": self._numero(self.e_us.get()) or 45,
-                "umbral_diario": self._numero(self.e_ud.get()) or 8,
-                "regla": "semanal",
+                "dia_cierre": max(0, self.cb_cierre.current()),
+                "umbral_diario": self._numero(self.e_contrato.get()) or 7,
+                "regla": "diaria",
                 "modo_extra": self.modo_extra.get(),
                 "recargo_extra": self._numero(self.e_recargo.get()),
                 "valor_extra_global": self._numero(self.e_vextra.get()),
@@ -657,49 +714,57 @@ class App(tk.Tk):
         for x in self._trabs:
             if x["nombre"] == self.cb_filtro_trab.get():
                 tid = x["id"]
-        for j in self.datos.jornadas(desde, hasta, tid):
-            if j["completa"]:
-                estado = "completa"
-                tags = ()
-            else:
-                estado = "falta " + ", ".join(x.lower() for x in j["faltan"])
-                tags = ("falta",)
+        dias = N.dias_con_valor(self.datos, desde, hasta, tid)
+        dias.sort(key=lambda x: (x["fecha"], x["nombre"]), reverse=True)
+        total = 0
+        for j in dias:
+            tags = () if j["completa"] else ("falta",)
+            if j["extra"] > 0 and j["completa"]:
+                tags = ("conextra",)
+            total += j["total"]
             self.tv_j.insert("", "end", iid=j["id"], tags=tags, values=(
-                j["fecha"], N.nombre_dia(j["fecha"]), j["nombre"],
+                j["fecha"], N.nombre_dia(j["fecha"])[:3], j["nombre"],
                 j["entrada"] or "--:--", j["colacion_inicio"] or "--:--",
                 j["colacion_fin"] or "--:--", j["salida"] or "--:--",
-                N.horas_txt(j["horas"]), estado))
+                N.horas_txt(j["horas"]), N.horas_txt(j["normales"]),
+                N.horas_txt(j["extra"]) if j["extra"] else "-",
+                N.pesos(j["pago_normal"]),
+                N.pesos(j["pago_extra"]) if j["pago_extra"] else "-",
+                N.pesos(j["total"])))
+        self.lbl_total_j.config(
+            text="%d dias   ·   suma de los dias mostrados:  %s"
+                 % (len(dias), N.pesos(total)))
 
     def recargar_resumen(self):
         for f in self.tv_r.get_children():
             self.tv_r.delete(f)
         if self.periodo == "semana":
-            r = N.resumen_semanal(self.datos, N.lunes_de(self.ancla))
-            titulo = r["titulo"]
-            nota = ("Horas extra: lo que pasa de %s h en la semana (lunes a domingo). "
-                    "Valor de la hora extra: %s."
-                    % (N._limpio(r["semanales"]), r["regla_extra"]))
+            r = N.resumen_semanal(self.datos, self.ancla)
+            titulo = "%s        %s" % (r["titulo"], r["subtitulo"].upper())
         else:
             d = datetime.strptime(self.ancla, "%Y-%m-%d").date()
             r = N.resumen_mensual(self.datos, d.year, d.month)
             titulo = r["titulo"]
-            nota = ("Horas extra del mes, calculadas semana a semana sobre %s h. "
-                    "Valor de la hora extra: %s."
-                    % (r["umbral_semanal"], r["regla_extra"]))
+        nota = ("Jornada del contrato: %s h al dia. Todo lo que se pasa de ahi en el "
+                "dia son horas extra, y la hora extra se paga con %s.\n"
+                "El total de arriba ya viene sumado: es lo que hay que pagar."
+                % (r["contrato"], r["regla_extra"]))
         self.lbl_periodo.config(text=titulo)
         self.lbl_regla.config(text=nota)
 
         for f in r["filas"]:
             self.tv_r.insert("", "end", tags=("extra",) if f["extra"] > 0 else (), values=(
-                f["nombre"], f.get("turnos", 0), N.horas_txt(f["horas"]),
-                N.horas_txt(f["colacion"]), N.horas_txt(f["ordinarias"]),
-                N.horas_txt(f["extra"]), N.pesos(f["valor_extra"]),
-                N.pesos(f["pago_extra"]), N.pesos(f["total"])))
+                f["nombre"], f["turnos"], N.horas_txt(f["horas"]),
+                N.horas_txt(f["ordinarias"]), N.horas_txt(f["extra"]),
+                N.pesos(f["valor_hora"]), N.pesos(f["valor_extra"]),
+                N.pesos(f["pago_ordinario"]), N.pesos(f["pago_extra"]),
+                N.pesos(f["total"])))
         t = r["totales"]
         self.tv_r.insert("", "end", tags=("total",), values=(
-            "TOTAL", t["turnos"], N.horas_txt(t["horas"]), N.horas_txt(t["colacion"]),
-            N.horas_txt(t["ordinarias"]), N.horas_txt(t["extra"]), "",
-            N.pesos(t["pago_extra"]), N.pesos(t["total"])))
+            "TOTAL", t["turnos"], N.horas_txt(t["horas"]),
+            N.horas_txt(t["ordinarias"]), N.horas_txt(t["extra"]), "", "",
+            N.pesos(t["pago_ordinario"]), N.pesos(t["pago_extra"]),
+            N.pesos(t["total"])))
 
     def recargar_trabajadores(self):
         for f in self.tv_t.get_children():
@@ -708,6 +773,7 @@ class App(tk.Tk):
             self.tv_t.insert("", "end", iid=str(t["id"]), values=(
                 t["nombre"], N.pesos(t["valor_hora"]),
                 N.pesos(t["valor_hora_extra"]) if t["valor_hora_extra"] else "-",
+                N._limpio(t["horas_contrato"]) if t["horas_contrato"] else "general",
                 self.datos.jornadas_de(t["id"])))
 
     def cargar_trabajador_sel(self):
@@ -720,11 +786,14 @@ class App(tk.Tk):
                 self._set(self.e_tvalor, "%d" % round(t["valor_hora"] or 0))
                 self._set(self.e_tvalorx,
                           "%d" % round(t["valor_hora_extra"]) if t["valor_hora_extra"] else "")
+                self._set(self.e_tcontrato,
+                          N._limpio(t["horas_contrato"]) if t["horas_contrato"] else "")
 
     def recargar_config(self):
         c = self.datos.config()
+        self._set(self.e_contrato, N._limpio(c.get("horas_contrato", "7")))
         self._set(self.e_us, N._limpio(c.get("umbral_semanal", "45")))
-        self._set(self.e_ud, N._limpio(c.get("umbral_diario", "8")))
+        self.cb_cierre.current(N.dia_cierre_de(c))
         self.modo_extra.set(c.get("modo_extra", "recargo"))
         self.e_recargo.config(state="normal")
         self.e_vextra.config(state="normal")
