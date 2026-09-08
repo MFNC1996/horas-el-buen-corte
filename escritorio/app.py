@@ -146,27 +146,27 @@ class App(tk.Tk):
 
         self.lbl_quien = tk.Label(self.panel, text="", bg=BLANCO, fg=TINTA,
                                   font=(FUENTE, 20, "bold"))
-        self.lbl_quien.pack(pady=(22, 2))
+        self.lbl_quien.pack(pady=(14, 1))
         self.lbl_toca = tk.Label(self.panel, text="", bg=BLANCO, fg=SUAVE,
                                  font=(FUENTE, 11))
         self.lbl_toca.pack()
         self.lbl_marca = tk.Label(self.panel, text="", bg=BLANCO, fg=ROJO,
-                                  font=(FUENTE, 30, "bold"))
-        self.lbl_marca.pack(pady=(2, 14))
+                                  font=(FUENTE, 26, "bold"))
+        self.lbl_marca.pack(pady=(1, 10))
 
         self.btn_marcar = tk.Button(
             self.panel, text="MARCAR", command=self.marcar,
             bg=TINTA, fg=PAPEL, activebackground=ROJO, activeforeground=BLANCO,
-            font=(FUENTE, 17, "bold"), relief="flat", cursor="hand2",
-            padx=52, pady=17, state="disabled")
+            font=(FUENTE, 16, "bold"), relief="flat", cursor="hand2",
+            padx=46, pady=13, state="disabled")
         self.btn_marcar.pack()
 
         self.lbl_hoy = tk.Label(self.panel, text="", bg=BLANCO, fg=SUAVE,
                                 font=(MONO, 11), justify="center")
-        self.lbl_hoy.pack(pady=(18, 6))
+        self.lbl_hoy.pack(pady=(12, 4))
         self.lbl_aviso = tk.Label(self.panel, text="", bg=BLANCO,
                                   font=(FUENTE, 12, "bold"))
-        self.lbl_aviso.pack(pady=(0, 20))
+        self.lbl_aviso.pack(pady=(0, 12))
 
     def _pintar_nombres(self):
         for w in self.caja_nombres.winfo_children():
