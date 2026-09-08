@@ -239,19 +239,20 @@ class App(tk.Tk):
         titulos = ["Trabajador", "Turnos", "Horas", "Colacion", "H. ordinarias",
                    "H. extra", "Valor hora", "Valor h. extra", "Pago ordinario",
                    "Pago extra", "TOTAL"]
-        anchos = [160, 62, 74, 78, 96, 74, 90, 100, 108, 92, 110]
+        anchos = [148, 58, 68, 74, 88, 66, 82, 92, 98, 86, 104]
+        self.lbl_regla = tk.Label(p, text="", bg=PAPEL, fg=SUAVE, font=(FUENTE, 9),
+                                  anchor="w", justify="left", wraplength=1040)
+        self.lbl_regla.pack(side="bottom", fill="x", pady=(10, 0))
         marco = ttk.Frame(p); marco.pack(fill="both", expand=True, pady=(12, 0))
         self.tv_r = ttk.Treeview(marco, columns=cols, show="headings", selectmode="none")
         for c, t, a in zip(cols, titulos, anchos):
             self.tv_r.heading(c, text=t)
-            self.tv_r.column(c, width=a, anchor="e" if c != "trab" else "w")
+            self.tv_r.column(c, width=a, minwidth=a, stretch=(c == "trab"),
+                             anchor="e" if c != "trab" else "w")
         self.tv_r.tag_configure("total", font=(FUENTE, 10, "bold"), background="#E6E1DC")
         self.tv_r.tag_configure("extra", foreground=ROJO)
         self.tv_r.pack(fill="both", expand=True)
 
-        self.lbl_regla = tk.Label(p, text="", bg=PAPEL, fg=SUAVE,
-                                  font=(FUENTE, 9), anchor="w", justify="left")
-        self.lbl_regla.pack(fill="x", pady=(10, 0))
 
     # -------------------------------------------------- pestana Trabajadores
     def _tab_trabajadores(self):
@@ -299,13 +300,16 @@ class App(tk.Tk):
 
         a = ttk.LabelFrame(p, text=" CUANDO UNA HORA ES EXTRA ", padding=14)
         a.pack(fill="x")
-        ttk.Label(a, text="Umbral diario (horas)", style="Rotulo.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(a, text="Umbral diario (horas)", style="Rotulo.TLabel").grid(
+            row=0, column=0, sticky="w", padx=(0, 20), pady=(0, 2))
         self.e_ud = ttk.Entry(a, width=10, font=mono(), justify="right")
         self.e_ud.grid(row=1, column=0, padx=(0, 20), sticky="w")
-        ttk.Label(a, text="Umbral semanal (horas)", style="Rotulo.TLabel").grid(row=0, column=1, sticky="w")
+        ttk.Label(a, text="Umbral semanal (horas)", style="Rotulo.TLabel").grid(
+            row=0, column=1, sticky="w", padx=(0, 20), pady=(0, 2))
         self.e_us = ttk.Entry(a, width=10, font=mono(), justify="right")
         self.e_us.grid(row=1, column=1, padx=(0, 20), sticky="w")
-        ttk.Label(a, text="Regla que se aplica", style="Rotulo.TLabel").grid(row=0, column=2, sticky="w")
+        ttk.Label(a, text="Regla que se aplica", style="Rotulo.TLabel").grid(
+            row=0, column=2, sticky="w", pady=(0, 2))
         self.cb_regla = ttk.Combobox(a, state="readonly", width=46, font=(FUENTE, 10), values=[
             "Diaria  -  lo que pasa del umbral de cada dia",
             "Semanal  -  lo que pasa del umbral de la semana",
