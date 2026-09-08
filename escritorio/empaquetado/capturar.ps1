@@ -45,18 +45,28 @@ function Fotografiar($nombre) {
     Write-Host "  capturada: $nombre"
 }
 
-# La ventana se centra sola y su tamano sale del de la pantalla, asi que la
-# posicion del primer boton de nombre es predecible.
+# La ventana se centra sola y su tamano sale del de la pantalla, asi que las
+# posiciones son predecibles. Se hace clic directo en cada pestana: Ctrl+Tab
+# se traga eventos y las capturas salian corridas.
+$pestanas = @(
+    @{ nombre = "1-marcar";          x = 91  },
+    @{ nombre = "3-jornadas";        x = 184 },
+    @{ nombre = "4-resumen-y-pago";  x = 321 },
+    @{ nombre = "5-trabajadores";    x = 470 },
+    @{ nombre = "6-configuracion";   x = 611 }
+)
+$yPestanas = 167
+
 Fotografiar "1-marcar"
-[Raton]::Clic(139, 268)
+[Raton]::Clic(139, 268)          # elegir al primer trabajador
 Start-Sleep -Seconds 2
 Fotografiar "2-marcar-elegido"
 
-foreach ($n in @("3-jornadas", "4-resumen-y-pago", "5-trabajadores",
-                 "6-configuracion")) {
-    [System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
+foreach ($t in $pestanas) {
+    if ($t.nombre -eq "1-marcar") { continue }
+    [Raton]::Clic($t.x, $yPestanas)
     Start-Sleep -Seconds 3
-    Fotografiar $n
+    Fotografiar $t.nombre
 }
 
 Get-Process -Name ControlDeHoras -ErrorAction SilentlyContinue | Stop-Process -Force
