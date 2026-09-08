@@ -277,7 +277,7 @@ class App(tk.Tk):
         titulos = ["Fecha", "Dia", "Trabajador", "Entrada", "Col. ini",
                    "Col. fin", "Salida", "Horas", "Normal", "Extra",
                    "$ normal", "$ extra", "VALOR DEL DIA"]
-        anchos = [84, 76, 128, 66, 66, 66, 62, 58, 58, 52, 82, 78, 110]
+        anchos = [78, 44, 116, 56, 56, 56, 56, 52, 54, 48, 76, 72, 104]
         marco = ttk.Frame(p)
         marco.pack(fill="both", expand=True)
         self.tv_j = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse")
@@ -289,9 +289,11 @@ class App(tk.Tk):
         self.tv_j.tag_configure("falta", background=AMBAR_CLARO, foreground=AMBAR)
         self.tv_j.tag_configure("conextra", foreground=ROJO)
         sb = ttk.Scrollbar(marco, orient="vertical", command=self.tv_j.yview)
-        self.tv_j.configure(yscrollcommand=sb.set)
-        self.tv_j.pack(side="left", fill="both", expand=True)
+        sbh = ttk.Scrollbar(marco, orient="horizontal", command=self.tv_j.xview)
+        self.tv_j.configure(yscrollcommand=sb.set, xscrollcommand=sbh.set)
         sb.pack(side="right", fill="y")
+        sbh.pack(side="bottom", fill="x")
+        self.tv_j.pack(side="left", fill="both", expand=True)
         self.tv_j.bind("<Double-1>", lambda e: self.abrir_editor())
 
     def abrir_editor(self):
@@ -336,7 +338,7 @@ class App(tk.Tk):
         titulos = ["Trabajador", "Dias", "Horas", "H. normales", "H. EXTRA",
                    "Valor hora", "Valor h. extra", "$ normales", "$ extra",
                    "TOTAL A PAGAR"]
-        anchos = [140, 52, 66, 86, 72, 84, 96, 96, 90, 122]
+        anchos = [132, 46, 62, 78, 66, 78, 90, 88, 84, 110]
         marco = ttk.Frame(p)
         marco.pack(fill="both", expand=True)
         self.tv_r = ttk.Treeview(marco, columns=cols, show="headings", selectmode="none")
@@ -346,6 +348,9 @@ class App(tk.Tk):
                              anchor="e" if c != "trab" else "w")
         self.tv_r.tag_configure("total", font=(FUENTE, 10, "bold"), background="#E6E1DC")
         self.tv_r.tag_configure("extra", foreground=ROJO)
+        sbr = ttk.Scrollbar(marco, orient="horizontal", command=self.tv_r.xview)
+        self.tv_r.configure(xscrollcommand=sbr.set)
+        sbr.pack(side="bottom", fill="x")
         self.tv_r.pack(fill="both", expand=True)
 
     def cambiar_periodo(self, cual):
