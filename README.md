@@ -1,153 +1,115 @@
-# Horas El Buen Corte
+# Control de Horas — Carnicería El Buen Corte
 
-Control de horas trabajadas para **Carnicería El Buen Corte, Loncoche**.
+Aplicación de escritorio para Windows: lleva las horas trabajadas de los
+trabajadores del local y genera el informe mensual para imprimir.
 
-Registro de jornadas y cálculo automático de horas extra, para los tres
-trabajadores del local.
+### Descargar
 
-**➡️ Para instalarla, sigue [INSTALAR.md](INSTALAR.md).**
+**https://mfnc1996.github.io/horas-el-buen-corte/**
 
-La app corre en un computador de la carnicería y los celulares entran por el
-WiFi del local. No depende de ninguna cuenta ni de ningún servicio externo, y
-los datos no salen del negocio.
+O directo: [ControlDeHoras-Setup.exe](https://github.com/MFNC1996/horas-el-buen-corte/releases/latest/download/ControlDeHoras-Setup.exe) (~18 MB)
 
-Hay una sola fuente de verdad — `app.html` — y de ahí salen tres versiones:
-
-| Versión | Se genera con | Dónde vive | Para quién |
-|---|---|---|---|
-| `local/index.html` | `build-local.py` | El computador del local, con `local/servidor.py` | **La que se usa.** Los trabajadores, por WiFi. |
-| `app.html` | — | [Artifact en Claude](https://claude.ai/code/artifact/b0f37a93-1360-495e-b641-5429ecd67e97) | Solo el dueño del proyecto. Para desarrollar y mostrar. |
-| `nube/index.html` | `build-web.py` | Firebase + GitHub Pages | Opcional, si algún día se quiere en internet. Ver [DESPLIEGUE.md](DESPLIEGUE.md). |
-
-La lógica de cálculo, el diseño y las vistas son idénticas en las tres: lo
-único que cambia es de dónde salen los datos.
+Doble clic y sigue el asistente. No necesita internet, ni servidor, ni instalar
+Python. Windows va a mostrar el aviso «Windows protegió tu PC» porque el
+instalador no está firmado con un certificado de pago: **Más información →
+Ejecutar de todas formas**.
 
 ---
 
-## Cómo se usa
+## Qué hace
 
 | Pestaña | Para qué |
 |---|---|
-| **Registrar** | Cargar una jornada: trabajador, fecha, entrada, salida y colación. |
-| **Resumen** | Lo que mira el dueño: totales por trabajador, por semana o por mes. |
-| **Registros** | Historial completo, con filtros, edición, borrado y exportación a CSV. |
-| **Ajustes** | Umbrales de horas extra y lista de trabajadores. |
+| **Jornadas** | Cargar entrada, salida y colación de cada día. |
+| **Resumen del mes** | El cuadro con horas, horas extra y lo que se paga. Exporta a Excel y PDF. |
+| **Trabajadores** | Nombres y valor de la hora. |
+| **Configuración** | Umbrales de horas extra y cuánto vale la hora extra. |
 
 ### Cargar la hora rápido
-Cada campo de hora tiene cuatro formas de llenarse, de la más rápida a la más precisa:
+El botón **Ahora** pone la hora actual redondeada a 5 minutos, **−15/+15** ajustan
+de a cuarto de hora, y los botones con horas ponen las más usadas. Abajo se ve al
+instante cuántas horas son y si hay extra, antes de guardar.
 
-1. **Un chip** con la hora habitual. Los chips **se aprenden solos**: muestran las
-   cuatro horas más usadas en los registros ya cargados. Hasta que haya historial,
-   muestran horas típicas de local (08:00 / 08:30 / 09:00 / 10:00 y 14:00 / 18:00 / 19:00 / 20:00).
-2. **Ahora** — pone la hora actual, redondeada a 5 minutos.
-3. **−15 / +15** — ajusta de a cuarto de hora.
-4. El campo de hora normal, para cualquier valor exacto.
-
-Debajo, un indicador en vivo muestra las horas trabajadas y, en rojo, las horas
-extra que se generarían — antes de guardar.
-
-### Primeros pasos
-1. Entra a **Ajustes** y reemplaza «Trabajador 1/2/3» por los nombres reales.
-2. Confirma los umbrales (vienen en 8 h al día y 45 h a la semana).
-3. Manda el link a los trabajadores por WhatsApp. Que lo guarden en la pantalla
-   de inicio del celular: cargar una jornada toma unos 10 segundos.
+### El informe mensual
+Excel y PDF, listos para imprimir. Traen, por trabajador: turnos trabajados,
+horas, colación descontada, horas ordinarias, horas extra, valor de cada hora,
+y lo pagado. Más el detalle día por día.
 
 ---
 
-## Horas extra
-
-Las **tres reglas se calculan siempre en paralelo**; el selector de Ajustes solo
-elige cuál se muestra como «horas extra a pagar»:
-
-- **Diaria** — lo que excede el umbral de cada día.
-- **Semanal** — lo que excede el umbral en el total de la semana.
-- **La mayor de las dos.**
-
-Cuando el cliente confirme cuál corresponde, es cambiar un selector: nada que rehacer.
-
-### Fórmulas
+## Cálculos
 
 **Horas trabajadas** = salida − entrada − colación.
-Si la salida es menor que la entrada, se asume que el turno cruza la medianoche
-(22:00 a 06:00 son 8 horas, no −16).
+Los turnos que cruzan la medianoche se calculan completos (22:00 a 06:00 son 8 h).
 
-**Extra diaria** = `máx(0, horas − umbral diario)`, día por día.
-**Extra semanal** = `máx(0, total de la semana − umbral semanal)`, de lunes a domingo.
+**Cuándo una hora es extra** — tres reglas, se elige en Configuración:
+- **Diaria**: lo que pasa del umbral de cada día (por defecto 8 h).
+- **Semanal**: lo que pasa del umbral de la semana, de lunes a domingo (45 h).
+- **La mayor de las dos.**
 
-En la vista de mes, cada semana se cuenta en el mes en que empieza.
+**Cuánto vale la hora extra** — dos modos:
+- **Recargo** sobre la hora normal. 50 % es lo que fija la ley en Chile.
+- **Monto fijo** en pesos. Cada trabajador puede tener el suyo propio.
 
-### Casos verificados
+Las horas extra de las reglas semanales se reparten entre los meses que toca cada
+semana, en proporción a las horas de cada mes. Así horas ordinarias + horas extra
+siempre suman las horas del mes, que es lo que tiene que cuadrar en una liquidación.
 
-| Caso | Entrada | Salida | Colación | Horas | Extra (umbral 8) |
-|---|---|---|---|---|---|
-| Jornada normal | 09:00 | 18:00 | 60 | 8,00 | 0,00 |
-| Con extra | 08:00 | 19:30 | 45 | 10,75 | 2,75 |
-| Turno nocturno | 22:00 | 06:00 | 0 | 8,00 | 0,00 |
-| Nocturno con colación | 23:30 | 07:15 | 30 | 7,25 | 0,00 |
-| Media jornada | 09:00 | 13:00 | 0 | 4,00 | 0,00 |
-| Sin colación | 09:00 | 18:00 | 0 | 9,00 | 1,00 |
-| Salida = entrada | 09:00 | 09:00 | 30 | 0,00 | 0,00 |
-
----
-
-## Diseño
-
-Toma la identidad del logo del local: rojo carmesí, verde y negro sobre blanco.
-Las **chairas cruzadas** son la marca de la cabecera, las **cintas con muesca y
-estrella** encabezan cada sección, y el **contorno ondulado** de la insignia
-separa la cabecera del contenido. El sombrero de huaso no se usa.
-
-Tipografías: Yellowtail (el nombre del local), Archivo (interfaz) e IBM Plex Mono
-(horas y cifras, alineadas en columna). Funciona en tema claro y oscuro, y está
-pensada primero para el celular.
+> Los montos son los que se configuren en la aplicación. Es una herramienta de
+> control interno: conviene confirmar las cifras con un contador antes de usarlas
+> para liquidaciones de sueldo.
 
 ---
 
-## Límites y mantención
+## Dónde quedan los datos
 
-- La base de datos guarda hasta **5.000 jornadas** (unos 5 años con 3 trabajadores).
-  Ajustes avisa al pasar las 900. Para liberar: exportar el CSV y borrar lo antiguo.
-- **Cualquiera con el link puede ver y editar todo**, incluidos los registros de
-  otros. Para un local de 3 personas es lo razonable; si hace falta separar
-  permisos entre dueño y trabajadores, se puede agregar.
-- **Quitar un trabajador** de la lista no borra sus jornadas ya registradas: el
-  nombre queda guardado en cada registro.
-- El CSV sale con `;` y coma decimal, listo para abrir en Excel en Chile.
+```
+C:\Users\TU-USUARIO\AppData\Local\ControlDeHoras\horas.sqlite3
+```
 
----
-
-## Pendientes a confirmar con el cliente
-
-1. **Umbral de horas extra**: ¿diario (8 h), semanal (45 h) o el mayor de ambos?
-2. **Colación**: hoy se descuenta de la jornada. Si se paga, se usa «Sin colación».
-3. **Recargo de horas extra** (ej. 50 %): hoy se informan horas, no pesos. Si hace
-   falta el monto, se agrega valor hora y factor de recargo.
-4. **Semana laboral**: hoy va de lunes a domingo.
+Fuera del programa, para que actualizar no borre nada. El botón **Abrir carpeta
+de datos**, en Configuración, lleva ahí. Conviene copiar ese archivo a un pendrive
+cada cierto tiempo.
 
 ---
 
-## Alternativa: Google Sheets + Formulario
+## Para desarrollar
 
-`Codigo.gs` es un script de Google Apps Script que arma el mismo sistema sobre un
-Formulario y una planilla de Google, por si el cliente prefiere sus datos dentro
-de su propio Drive. Se pega en script.google.com y se ejecuta `crearSistema()`
-una vez; deja el formulario, la hoja de registros con las fórmulas, un resumen
-semanal, un panel mensual y una hoja de configuración.
-
-No es necesario si se usa la app: son dos caminos para lo mismo.
-
----
-
-## Archivos
+```bash
+pip install -r escritorio/requisitos.txt
+python escritorio/app.py
+```
 
 | Archivo | Qué es |
 |---|---|
-| `app.html` | La app. **Fuente única**; las otras dos versiones se generan de aquí. |
-| `local/servidor.py` | Servidor del local. Solo librería estándar de Python 3 + SQLite. |
-| `local/index.html` | Cliente para el servidor local. *Generado — no editar a mano.* |
-| `local/instalar-mac.command` · `instalar-windows.bat` | Dejan la app encendida siempre: arranque al prender el equipo y reinicio si se cae. |
-| `build-local.py` · `build-web.py` | Generan las otras versiones desde `app.html`. Fallan ruidosamente si algo no calza. |
-| `INSTALAR.md` | Cómo dejarla andando en el local. **Empieza por aquí.** |
-| `DESPLIEGUE.md` | La opción en la nube, si alguna vez se necesita. |
-| `docs/index.html` | Página de presentación con el link de descarga (GitHub Pages). |
-| `Codigo.gs` | Camino alternativo con Google Forms + Sheets. |
+| `escritorio/nucleo.py` | Datos (SQLite) y cálculos. Sin interfaz, para poder probarlo solo. |
+| `escritorio/app.py` | La ventana, en Tkinter. |
+| `escritorio/informes.py` | Informe mensual en Excel y PDF. |
+| `escritorio/probar_nucleo.py` | 37 pruebas de los cálculos y la plata. |
+| `escritorio/probar_ventana.py` | Arma la ventana entera y revisa sus controles, sin mostrarla. |
+| `escritorio/empaquetado/` | Receta de PyInstaller, script de Inno Setup e ícono. |
+
+### Cómo se construye el instalador
+`.github/workflows/instalador-windows.yml` lo arma en una máquina Windows de
+GitHub Actions: corre las pruebas, empaqueta el `.exe` con PyInstaller, **abre la
+aplicación y le saca capturas a las cuatro pestañas** (para poder revisar la
+interfaz sin tener un Windows a mano), construye el instalador con Inno Setup y
+publica la descarga.
+
+Las capturas quedan como artefacto de cada compilación.
+
+---
+
+## Versiones anteriores
+
+Antes de llegar a la aplicación de escritorio se probaron otros caminos, que
+quedan en el repositorio por si sirven:
+
+| Carpeta | Qué era |
+|---|---|
+| `local/` | La misma app como página web servida por un Python en un PC del local, con los celulares entrando por WiFi. Funciona, pero depende de que ese PC esté encendido. |
+| `nube/` | Versión web para Firebase + GitHub Pages. Necesita crear un proyecto de Firebase. |
+| `Codigo.gs` | Un Google Form que alimenta una planilla de cálculo con las fórmulas puestas. Cero mantención, pero sin interfaz propia. |
+| `app.html` | La app web original, de donde salen `local/` y `nube/`. |
+
+Ninguna hace falta para usar la aplicación de escritorio.

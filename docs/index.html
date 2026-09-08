@@ -2,90 +2,83 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#B4141F">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Control de Horas — El Buen Corte</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Yellowtail&display=swap">
 <style>
-:root{--ground:#F1EFEC;--surface:#fff;--line:#DFD8D1;--ink:#15100F;--muted:#6C625C;
-      --brand:#B4141F;--green:#16793B}
-@media(prefers-color-scheme:dark){:root:not([data-theme=light]){
-  --ground:#121010;--surface:#1B1817;--line:#332C2B;--ink:#F1EAE6;--muted:#A5968F;
-  --brand:#EE5560;--green:#4CBE74}}
+:root{--papel:#F1EFEC;--blanco:#fff;--linea:#DFD8D1;--tinta:#15100F;--suave:#6C625C;--rojo:#B4141F;--verde:#16793B}
+@media (prefers-color-scheme:dark){:root{--papel:#121010;--blanco:#1B1817;--linea:#332C2B;--tinta:#F1EAE6;--suave:#A5968F;--rojo:#EE5560;--verde:#4CBE74}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--ground);color:var(--ink);
-  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;line-height:1.6}
-.top{background:var(--surface);border-bottom:1px solid var(--line);padding:22px 20px}
-.in{max-width:720px;margin:0 auto}
-.mark{width:56px;height:56px}
-.mark .blade{fill:var(--ground);stroke:var(--ink);stroke-width:5}
-.mark .handle{fill:var(--brand);stroke:var(--ink);stroke-width:5}
-.mark .ring{fill:none;stroke:var(--green);stroke-width:7}
-.head{display:flex;align-items:center;gap:14px}
-.shop{font-family:Yellowtail,cursive;font-size:32px;color:var(--brand);line-height:1}
-.town{font-size:11px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
-main{max-width:720px;margin:0 auto;padding:28px 20px 80px}
-h2{font-size:20px;margin:32px 0 10px}
-p{margin:0 0 14px}
-ol{padding-left:22px}li{margin-bottom:10px}
-code{font-family:ui-monospace,monospace;background:var(--surface);border:1px solid var(--line);
-  border-radius:5px;padding:2px 6px;font-size:.9em}
-.cta{display:inline-block;background:var(--ink);color:var(--ground);text-decoration:none;
-  padding:14px 22px;border-radius:10px;font-weight:600;margin:6px 0}
-.cta:hover{background:var(--brand);color:#fff}
-.nota{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--brand);
-  border-radius:8px;padding:14px 16px;font-size:15px}
+body{margin:0;background:var(--papel);color:var(--tinta);font-family:Archivo,system-ui,sans-serif;line-height:1.6}
+.env{max-width:720px;margin:0 auto;padding:48px 20px 80px}
+.marca{font-family:Yellowtail,cursive;font-size:44px;color:var(--rojo);line-height:1}
+.lugar{font-size:11px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--suave);margin:6px 0 0}
+hr{border:0;border-top:3px solid var(--verde);margin:22px 0 32px}
+h1{font-size:27px;margin:0 0 10px}
+p{margin:0 0 16px}
+.baja{display:inline-block;background:var(--tinta);color:var(--papel);text-decoration:none;
+  padding:17px 32px;border-radius:10px;font-weight:600;font-size:17px;margin:10px 0}
+.baja:hover{background:var(--rojo);color:#fff}
+.chico{font-size:13px;color:var(--suave)}
+.tarjeta{background:var(--blanco);border:1px solid var(--linea);border-radius:10px;padding:20px 24px;margin:26px 0}
+ol,ul{margin:0;padding-left:22px}
+li{margin:7px 0}
+h2{font-size:17px;margin:30px 0 10px}
+code{background:var(--papel);border:1px solid var(--linea);border-radius:5px;padding:2px 6px;font-size:13px}
+a{color:var(--rojo)}
 </style>
 </head>
 <body>
-<div class="top"><div class="in"><div class="head">
-  <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
-    <circle class="ring" cx="50" cy="50" r="45"/>
-    <g transform="translate(50 50) rotate(-33) scale(.76)">
-      <path class="blade" d="M-12-42h24a4 4 0 0 1 4 4v32h-32v-32a4 4 0 0 1 4-4z"/>
-      <path class="handle" d="M-5-8h10v46a5 5 0 0 1-10 0z"/></g>
-    <g transform="translate(50 50) scale(-.76 .76) rotate(-33)">
-      <path class="blade" d="M-12-42h24a4 4 0 0 1 4 4v32h-32v-32a4 4 0 0 1 4-4z"/>
-      <path class="handle" d="M-5-8h10v46a5 5 0 0 1-10 0z"/></g>
-  </svg>
-  <div><div class="shop">El Buen Corte</div>
-       <div class="town">Loncoche &middot; Control de horas</div></div>
-</div></div></div>
-<main>
-<p>Registro de jornadas y cálculo automático de horas extra para los tres
-trabajadores del local.</p>
+<div class="env">
+  <div class="marca">El Buen Corte</div>
+  <p class="lugar">Loncoche · Control de horas</p>
+  <hr>
 
-<div class="nota"><strong>Esta página no es la app.</strong> La app corre en un
-computador de la carnicería, y los celulares entran por el WiFi del local. Así
-los datos no salen de ahí y no depende de ningún servicio externo.</div>
+  <h1>Aplicación para Windows</h1>
+  <p>Lleva las horas trabajadas de los trabajadores del local y genera el informe
+     mensual para imprimir, en Excel o PDF, con los turnos, la colación, las horas
+     extra y cuánto se pagó.</p>
 
-<h2>Instalarla</h2>
-<a class="cta" href="https://github.com/MFNC1996/horas-el-buen-corte/archive/refs/heads/main.zip">Descargar el proyecto (ZIP)</a>
-<ol>
-  <li>Descarga el ZIP en el computador que va a quedar encendido en el local
-      y descomprímelo.</li>
-  <li>Necesitas <a href="https://www.python.org/downloads/">Python 3</a>.
-      En Mac ya viene. En Windows, al instalarlo marca
-      <strong>«Add Python to PATH»</strong>.</li>
-  <li>Entra a la carpeta <code>local</code> y haz doble clic en
-      <code>instalar-mac.command</code> o <code>instalar-windows.bat</code>.</li>
-  <li>Te va a mostrar la dirección, algo como
-      <code>http://192.168.1.50:8080</code>. Esa es la que se manda por WhatsApp.</li>
-</ol>
-<p>Queda encendida sola cada vez que se prende el computador, y se levanta sola
-si se cae. Los detalles están en
-<a href="https://github.com/MFNC1996/horas-el-buen-corte/blob/main/INSTALAR.md">INSTALAR.md</a>.</p>
+  <a class="baja" href="https://github.com/MFNC1996/horas-el-buen-corte/releases/latest/download/ControlDeHoras-Setup.exe">
+    Descargar el instalador</a>
+  <p class="chico">ControlDeHoras-Setup.exe · unos 18 MB · Windows 10 u 11</p>
 
-<h2>Qué hace</h2>
-<ul>
-  <li>Registrar jornada: trabajador, fecha, entrada, salida y colación.
-      Chips con las horas de siempre, botón «Ahora» y ajuste de ±15 min.</li>
-  <li>Calcula horas trabajadas y horas extra, con turnos que cruzan la medianoche.</li>
-  <li>Resumen por semana o por mes, y exportación a CSV para Excel.</li>
-  <li>Umbrales configurables: 8 h al día, 45 h a la semana, o la mayor de las dos.</li>
-</ul>
-</main>
+  <div class="tarjeta">
+    <h2 style="margin-top:0">Cómo instalarlo</h2>
+    <ol>
+      <li>Descarga el archivo y dale doble clic.</li>
+      <li>Windows va a mostrar un aviso azul que dice <em>«Windows protegió tu PC»</em>.
+          Es porque el instalador no está firmado con un certificado de pago.
+          Haz clic en <strong>Más información</strong> y después en
+          <strong>Ejecutar de todas formas</strong>.</li>
+      <li>Sigue el asistente. Queda un acceso directo en el Escritorio.</li>
+    </ol>
+  </div>
+
+  <h2>No necesita nada más</h2>
+  <ul>
+    <li>Sin internet, sin servidor, sin instalar Python.</li>
+    <li>Los datos quedan en tu carpeta de usuario, no dentro del programa: puedes
+        instalar una versión nueva sin perder las jornadas ya registradas.</li>
+  </ul>
+
+  <h2>Lo primero que hay que hacer</h2>
+  <ol>
+    <li>En <strong>Trabajadores</strong>, poner los nombres reales y el valor de la hora.</li>
+    <li>En <strong>Configuración</strong>, definir desde cuántas horas se cuenta como
+        extra y cuánto vale la hora extra: un recargo sobre la hora normal
+        (50 % es lo que fija la ley en Chile) o un monto fijo en pesos.</li>
+  </ol>
+
+  <p class="chico" style="margin-top:34px">
+    Los montos que calcula son los que se configuren en la aplicación. Es una
+    herramienta de control interno: conviene confirmar las cifras con un contador
+    antes de usarlas para liquidaciones de sueldo.<br><br>
+    Código y versiones anteriores en
+    <a href="https://github.com/MFNC1996/horas-el-buen-corte">GitHub</a>.
+  </p>
+</div>
 </body>
 </html>
