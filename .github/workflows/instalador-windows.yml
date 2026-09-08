@@ -36,25 +36,41 @@ jobs:
       - name: Construir el .exe
         run: pyinstaller --noconfirm --clean escritorio/empaquetado/ControlDeHoras.spec
 
-      - name: Abrir la app y sacarle una foto
+      - name: Llenar con datos de ejemplo para las capturas
+        run: python escritorio/empaquetado/sembrar_demo.py
+
+      - name: Abrir la app y fotografiar cada pestana
         shell: pwsh
         run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          New-Item -ItemType Directory -Force -Path capturas | Out-Null
+
           $p = Start-Process -FilePath "dist\ControlDeHoras.exe" -PassThru
           Start-Sleep -Seconds 15
           if ($p.HasExited) {
             Write-Error "La aplicacion se cerro sola (codigo $($p.ExitCode))."
             exit 1
           }
-          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-          $ancho = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width
-          $alto  = [System.Windows.Forms.SystemInformation]::VirtualScreen.Height
-          $bmp = New-Object System.Drawing.Bitmap $ancho, $alto
-          $g = [System.Drawing.Graphics]::FromImage($bmp)
-          $g.CopyFromScreen(0, 0, 0, 0, $bmp.Size)
-          New-Item -ItemType Directory -Force -Path capturas | Out-Null
-          $bmp.Save("$PWD\capturas\ventana.png",
-                    [System.Drawing.Imaging.ImageFormat]::Png)
           Write-Host "La app siguio abierta 15 segundos: arranca bien."
+
+          function Fotografiar($nombre) {
+            $a = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width
+            $h = [System.Windows.Forms.SystemInformation]::VirtualScreen.Height
+            $bmp = New-Object System.Drawing.Bitmap $a, $h
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen(0, 0, 0, 0, $bmp.Size)
+            $bmp.Save("$PWD\capturas\$nombre.png",
+                      [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+          }
+
+          [System.Windows.Forms.SendKeys]::SendWait("^{TAB}") 2>$null
+          Fotografiar "1-jornadas"
+          foreach ($n in @("2-resumen", "3-trabajadores", "4-configuracion")) {
+            [System.Windows.Forms.SendKeys]::SendWait("^{TAB}")
+            Start-Sleep -Seconds 2
+            Fotografiar $n
+          }
           Stop-Process -Id $p.Id -Force
 
       - name: Preparar el LEEME
@@ -88,11 +104,11 @@ jobs:
           name: ControlDeHoras-Setup
           path: salida/ControlDeHoras-Setup.exe
 
-      - name: Guardar la captura de la ventana
+      - name: Guardar las capturas
         uses: actions/upload-artifact@v4
         with:
-          name: captura-ventana
-          path: capturas/ventana.png
+          name: capturas-ventana
+          path: capturas/
 
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2

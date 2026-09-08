@@ -57,6 +57,7 @@ class App(tk.Tk):
 
         self.tabs = ttk.Notebook(self)
         self.tabs.pack(fill="both", expand=True, padx=14, pady=(0, 12))
+        self.tabs.enable_traversal()
         self._tab_jornadas()
         self._tab_resumen()
         self._tab_trabajadores()
@@ -107,15 +108,15 @@ class App(tk.Tk):
               foreground=[("selected", BLANCO)])
 
     def _cabecera(self):
-        barra = tk.Frame(self, bg=BLANCO, height=64)
+        barra = tk.Frame(self, bg=BLANCO, height=76)
         barra.pack(fill="x", side="top")
         barra.pack_propagate(False)
         cont = tk.Frame(barra, bg=BLANCO)
-        cont.pack(side="left", padx=18, pady=8)
+        cont.pack(side="left", padx=18, pady=10)
         tk.Label(cont, text="El Buen Corte", bg=BLANCO, fg=ROJO,
                  font=(FUENTE, 19, "bold italic")).pack(anchor="w")
         tk.Label(cont, text="LONCOCHE  ·  CONTROL DE HORAS", bg=BLANCO, fg=SUAVE,
-                 font=(FUENTE, 8, "bold")).pack(anchor="w")
+                 font=(FUENTE, 8, "bold")).pack(anchor="w", pady=(2, 0))
         tk.Frame(self, bg=VERDE, height=3).pack(fill="x")
 
     # ------------------------------------------------------ pestana Jornadas
