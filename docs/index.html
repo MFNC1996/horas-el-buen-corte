@@ -37,9 +37,14 @@ a{color:var(--rojo)}
   <hr>
 
   <h1>Aplicación para Windows</h1>
-  <p>Lleva las horas trabajadas de los trabajadores del local y genera el informe
-     mensual para imprimir, en Excel o PDF, con los turnos, la colación, las horas
-     extra y cuánto se pagó.</p>
+  <p>Marcación de asistencia y control de horas. El trabajador toca su nombre y
+     presiona <strong>Marcar</strong>: la aplicación sola sabe cuál de las cuatro
+     marcas del día le corresponde.</p>
+  <p style="font-family:ui-monospace,monospace;font-size:14px;color:var(--suave)">
+     entrada &rarr; inicio colación &rarr; fin colación &rarr; salida</p>
+  <p>Con eso calcula las horas de cada día y, sobre todo, las <strong>horas
+     extra de la semana</strong> y cuánto hay que pagar. Informe mensual para
+     imprimir, en Excel o PDF.</p>
 
   <a class="baja" href="https://github.com/MFNC1996/horas-el-buen-corte/releases/latest/download/ControlDeHoras-Setup.exe">
     Descargar el instalador</a>
@@ -60,6 +65,8 @@ a{color:var(--rojo)}
   <h2>No necesita nada más</h2>
   <ul>
     <li>Sin internet, sin servidor, sin instalar Python.</li>
+    <li>Cada trabajador lleva su propia cuenta: si se alternan marcando, no se
+        mezclan nunca.</li>
     <li>Los datos quedan en tu carpeta de usuario, no dentro del programa: puedes
         instalar una versión nueva sin perder las jornadas ya registradas.</li>
   </ul>
@@ -67,9 +74,10 @@ a{color:var(--rojo)}
   <h2>Lo primero que hay que hacer</h2>
   <ol>
     <li>En <strong>Trabajadores</strong>, poner los nombres reales y el valor de la hora.</li>
-    <li>En <strong>Configuración</strong>, definir desde cuántas horas se cuenta como
-        extra y cuánto vale la hora extra: un recargo sobre la hora normal
-        (50 % es lo que fija la ley en Chile) o un monto fijo en pesos.</li>
+    <li>En <strong>Configuración</strong>, poner las horas semanales legales
+        (todo lo que se pase de ahí en la semana es hora extra) y cuánto vale la
+        hora extra: un recargo sobre la hora normal (50 % es lo que fija la ley
+        en Chile) o un monto fijo en pesos.</li>
   </ol>
 
   <p class="chico" style="margin-top:34px">

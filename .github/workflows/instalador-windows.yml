@@ -197,11 +197,27 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: Control de Horas 1.0.0
+          tag_name: v1.1.0
+          name: Control de Horas 1.1.0
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
+
+            ### Novedad de esta version: marcacion de asistencia
+
+            El trabajador toca su nombre y presiona MARCAR. La aplicacion sola
+            sabe cual de las cuatro marcas del dia le toca:
+
+            entrada -> inicio colacion -> fin colacion -> salida
+
+            La hora la pone el reloj del computador. Cada trabajador lleva su
+            propia cuenta, asi que si se alternan no se mezclan nunca, y apenas
+            alguien marca se suelta la seleccion para que el siguiente no marque
+            por error a nombre del anterior.
+
+            Las horas extra son las que se pasan de la jornada semanal legal
+            configurada. El administrador puede corregir a mano cualquier marca
+            desde la pestana Jornadas.
 
             **Descarga `ControlDeHoras-Setup.exe` y dale doble clic.**
 
