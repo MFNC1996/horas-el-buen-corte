@@ -140,11 +140,18 @@ jobs:
           Start-Sleep -Seconds 2
 
           Write-Host "== Desinstalando =="
-          $d = Start-Process -FilePath $desinst.FullName `
-               -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
-          Start-Sleep -Seconds 5
+          Start-Process -FilePath $desinst.FullName `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait | Out-Null
+          # El desinstalador de Inno Setup se copia a la carpeta temporal y
+          # sigue trabajando en segundo plano, asi que -Wait vuelve antes de
+          # tiempo. Hay que esperar a que el ejecutable desaparezca.
+          $limite = (Get-Date).AddSeconds(90)
+          while ((Test-Path $exe) -and (Get-Date) -lt $limite) {
+            Start-Sleep -Seconds 3
+          }
           if (Test-Path $exe) {
-            Write-Error "La desinstalacion dejo el ejecutable en su lugar."; exit 1
+            Write-Error "Tras 90 segundos la desinstalacion dejo $exe en su lugar."
+            exit 1
           }
           Write-Host "Desinstalado limpio."
 
