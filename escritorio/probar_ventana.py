@@ -108,7 +108,15 @@ check("guarda el cambio de nombre",
 
 print("\n--- guardar configuracion ---")
 v._set(v.e_ud, "9"); v._set(v.e_us, "44")
-v.cb_regla.current(1); v.modo_extra.set("fijo"); v._set(v.e_vextra, "7000")
+v.cb_regla.current(1)
+# Igual que al pulsar el boton de radio: cambiar la variable y refrescar, que
+# es lo que habilita el campo. Tk ignora escribir en un campo deshabilitado.
+v.modo_extra.set("fijo"); v._refrescar_modo()
+v._set(v.e_vextra, "7000")
+check("al elegir monto fijo se habilita su campo",
+      str(v.e_vextra.cget("state")) == "normal")
+check("y se deshabilita el del recargo",
+      str(v.e_recargo.cget("state")) == "disabled")
 v.guardar_config()
 c = v.datos.config()
 check("umbral diario guardado", float(c["umbral_diario"]) == 9.0)
