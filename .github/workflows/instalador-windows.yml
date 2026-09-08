@@ -140,8 +140,11 @@ jobs:
           Start-Sleep -Seconds 2
 
           Write-Host "== Desinstalando =="
+          $reg = "$PWD\desinstalacion.log"
+          Write-Host "Desinstalador: $($desinst.FullName)"
           Start-Process -FilePath $desinst.FullName `
-            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait | Out-Null
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/LOG=$reg" `
+            -Wait | Out-Null
           # El desinstalador de Inno Setup se copia a la carpeta temporal y
           # sigue trabajando en segundo plano, asi que -Wait vuelve antes de
           # tiempo. Hay que esperar a que el ejecutable desaparezca.
@@ -150,6 +153,14 @@ jobs:
             Start-Sleep -Seconds 3
           }
           if (Test-Path $exe) {
+            Write-Host "== Que quedo en la carpeta =="
+            Get-ChildItem $destino -Recurse | Select-Object FullName | Format-Table -Auto
+            if (Test-Path $reg) {
+              Write-Host "== Registro del desinstalador =="
+              Get-Content $reg | Select-Object -Last 40
+            } else {
+              Write-Host "El desinstalador no dejo registro en $reg"
+            }
             Write-Error "Tras 90 segundos la desinstalacion dejo $exe en su lugar."
             exit 1
           }
