@@ -15,14 +15,13 @@ GRIS = "EDE9E4"
 
 
 def _pie(r):
-    reglas = {"diaria": "sobre el umbral de cada dia",
-              "semanal": "sobre el umbral de la semana",
-              "mayor": "la mayor entre el criterio diario y el semanal"}
     return [
-        "Horas trabajadas = salida - entrada - colacion. Los turnos que cruzan "
-        "la medianoche se calculan completos.",
-        "Horas extra: %s (umbral diario %s h, semanal %s h)."
-        % (reglas.get(r["regla"], ""), r["umbral_diario"], r["umbral_semanal"]),
+        "Cada dia se arma con cuatro marcas: entrada, inicio y fin de colacion, "
+        "y salida. Horas trabajadas = salida - entrada - colacion. Los turnos "
+        "que cruzan la medianoche se calculan completos.",
+        "Horas extra: lo que se pasa de %s h EN LA SEMANA (lunes a domingo). "
+        "Que un dia suelto se pase o quede corto no cambia el pago."
+        % r["umbral_semanal"],
         "Valor de la hora extra: %s." % r["regla_extra"],
         "Las horas extra de las reglas semanales se reparten entre los meses "
         "que toca cada semana, en proporcion a las horas de cada mes.",
@@ -119,9 +118,9 @@ def a_excel(r, ruta):
     d = wb.create_sheet("Detalle")
     d["A1"] = "Detalle de turnos  -  %s" % r["titulo"]
     d["A1"].font = Font(name="Calibri", size=13, bold=True, color=TINTA)
-    encabezados = [("Fecha", 12), ("Dia", 12), ("Trabajador", 24), ("Entrada", 10),
-                   ("Salida", 10), ("Colacion (min)", 15), ("Horas", 10),
-                   ("Extra del dia", 14), ("Nota", 30)]
+    encabezados = [("Fecha", 12), ("Dia", 12), ("Trabajador", 22), ("Entrada", 10),
+                   ("Col. inicio", 12), ("Col. fin", 11), ("Salida", 10),
+                   ("Colacion (min)", 15), ("Horas", 10), ("Estado", 22)]
     fila = 3
     for i, (nombre, ancho) in enumerate(encabezados, start=1):
         c = d.cell(row=fila, column=i, value=nombre)
@@ -132,15 +131,18 @@ def a_excel(r, ruta):
     for f in r["filas"]:
         for j in f["detalle"]:
             fila += 1
-            valores = [j["fecha"], j["dia"], f["nombre"], j["entrada"], j["salida"],
-                       j["colacion"], j["horas"], j["extra_dia"], j.get("nota", "")]
+            valores = [j["fecha"], j["dia"], f["nombre"], j.get("entrada", ""),
+                       j.get("colacion_inicio", ""), j.get("colacion_fin", ""),
+                       j.get("salida", ""), j["colacion"], j["horas"],
+                       "completa" if j.get("completa", True)
+                       else "falta " + ", ".join(x.lower() for x in j.get("faltan", []))]
             for i, v in enumerate(valores, start=1):
                 c = d.cell(row=fila, column=i, value=v)
                 c.border = borde
-                if i in (7, 8):
+                if i == 9:
                     c.number_format = "0.00"
-                if i == 8 and j["extra_dia"] > 0:
-                    c.font = Font(name="Calibri", bold=True, color=ROJO)
+                if i == 10 and v != "completa":
+                    c.font = Font(name="Calibri", bold=True, color="8A5A00")
 
     d.freeze_panes = "A4"
     d.page_setup.fitToWidth = 1
@@ -232,13 +234,15 @@ def a_pdf(r, ruta):
         hist.append(Paragraph("%s &nbsp;&mdash;&nbsp; %d turnos, %s h, %s"
                               % (f["nombre"], f["turnos"], horas_txt(f["horas"]),
                                  pesos(f["total"])), sec))
-        det = [["Fecha", "Dia", "Entrada", "Salida", "Colacion", "Horas", "Extra"]]
+        det = [["Fecha", "Dia", "Entrada", "Col. inicio", "Col. fin", "Salida",
+                "Colacion", "Horas"]]
         for j in f["detalle"]:
-            det.append([j["fecha"], j["dia"], j["entrada"], j["salida"],
-                        "%d min" % j["colacion"], hhmm_txt(j["horas"]),
-                        horas_txt(j["extra_dia"]) if j["extra_dia"] else "-"])
-        td = Table(det, colWidths=[26 * mm, 24 * mm, 22 * mm, 22 * mm,
-                                   24 * mm, 20 * mm, 20 * mm], repeatRows=1)
+            det.append([j["fecha"], j["dia"], j.get("entrada", "-"),
+                        j.get("colacion_inicio", "-") or "-",
+                        j.get("colacion_fin", "-") or "-", j.get("salida", "-"),
+                        "%d min" % j["colacion"], hhmm_txt(j["horas"])])
+        td = Table(det, colWidths=[26 * mm, 24 * mm, 21 * mm, 24 * mm,
+                                   21 * mm, 21 * mm, 22 * mm, 20 * mm], repeatRows=1)
         td.hAlign = "LEFT"
         td.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), gris),

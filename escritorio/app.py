@@ -23,18 +23,16 @@ ROJO = "#B4141F"
 ROJO_CLARO = "#F8E4E5"
 VERDE = "#16793B"
 VERDE_CLARO = "#DFF0E4"
+AMBAR = "#8A5A00"
+AMBAR_CLARO = "#FBF0DC"
 TINTA = "#15100F"
 PAPEL = "#F1EFEC"
 BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-COLACIONES = [0, 30, 45, 60]
 FUENTE = "Segoe UI" if sys.platform.startswith("win") else "Helvetica"
-
-
-def mono():
-    return ("Consolas" if sys.platform.startswith("win") else "Menlo", 11)
+MONO = "Consolas" if sys.platform.startswith("win") else "Menlo"
 
 
 class App(tk.Tk):
@@ -43,43 +41,41 @@ class App(tk.Tk):
         self.datos = N.Datos()
         primera = self.datos.sembrar_si_vacia()
         try:
-            self.datos.respaldar()          # copia del dia, se conservan 30
+            self.datos.respaldar()
         except Exception:
-            pass                            # nunca impedir abrir la aplicacion
+            pass
 
         self.title("Control de Horas  -  El Buen Corte")
-        # Muchos computadores de local son de 1366x768: la ventana se ajusta
-        # a la pantalla en vez de quedar con el borde de abajo cortado.
         ancho = min(1120, self.winfo_screenwidth() - 60)
         alto = min(720, self.winfo_screenheight() - 110)
-        x = max(0, (self.winfo_screenwidth() - ancho) // 2)
-        y = max(0, (self.winfo_screenheight() - alto) // 3)
-        self.geometry("%dx%d+%d+%d" % (ancho, alto, x, y))
+        self.geometry("%dx%d+%d+%d" % (
+            ancho, alto, max(0, (self.winfo_screenwidth() - ancho) // 2),
+            max(0, (self.winfo_screenheight() - alto) // 3)))
         self.minsize(min(900, ancho), min(560, alto))
         self.configure(bg=PAPEL)
 
-        self.editando = None          # id de la jornada en edicion
-        hoy = date.today()
-        self.mes_sel = tk.StringVar(value="%04d-%02d" % (hoy.year, hoy.month))
+        self.sel_trab = None          # trabajador elegido en la pantalla de marcar
+        self.periodo = "semana"
+        self.ancla = date.today().isoformat()
 
         self._estilos()
         self._cabecera()
-
         self.tabs = ttk.Notebook(self)
         self.tabs.pack(fill="both", expand=True, padx=14, pady=(0, 12))
         self.tabs.enable_traversal()
+        self._tab_marcar()
         self._tab_jornadas()
         self._tab_resumen()
         self._tab_trabajadores()
         self._tab_config()
 
         self.recargar_todo()
+        self._latido()
         if primera:
             self.after(400, lambda: messagebox.showinfo(
                 "Primer uso",
-                "Cree tres trabajadores de ejemplo.\n\n"
-                "Anda a la pestana Trabajadores para ponerles el nombre real "
-                "y el valor de la hora."))
+                "Cree tres trabajadores de ejemplo.\n\nAnda a la pestana "
+                "Trabajadores para ponerles el nombre real y el valor de la hora."))
 
     # ------------------------------------------------------------ apariencia
     def _estilos(self):
@@ -91,25 +87,22 @@ class App(tk.Tk):
         e.configure(".", background=PAPEL, foreground=TINTA,
                     font=(FUENTE, 10), fieldbackground=BLANCO)
         e.configure("TNotebook", background=PAPEL, borderwidth=0)
-        e.configure("TNotebook.Tab", padding=(20, 10), font=(FUENTE, 10, "bold"),
+        e.configure("TNotebook.Tab", padding=(18, 10), font=(FUENTE, 10, "bold"),
                     background=PAPEL, foreground=SUAVE)
         e.map("TNotebook.Tab", background=[("selected", TINTA)],
               foreground=[("selected", PAPEL)])
         e.configure("TFrame", background=PAPEL)
-        e.configure("Tarjeta.TFrame", background=BLANCO, relief="flat")
         e.configure("TLabelframe", background=PAPEL, borderwidth=1,
                     relief="solid", bordercolor=LINEA)
         e.configure("TLabelframe.Label", background=PAPEL, foreground=SUAVE,
                     font=(FUENTE, 9, "bold"))
         e.configure("TLabel", background=PAPEL)
         e.configure("Rotulo.TLabel", foreground=SUAVE, font=(FUENTE, 9, "bold"))
-        e.configure("Titulo.TLabel", font=(FUENTE, 15, "bold"), foreground=TINTA)
-        e.configure("Dato.TLabel", font=mono())
         e.configure("TButton", padding=(12, 7), font=(FUENTE, 10))
         e.configure("Principal.TButton", padding=(16, 9),
                     font=(FUENTE, 10, "bold"), background=TINTA, foreground=PAPEL)
         e.map("Principal.TButton", background=[("active", ROJO)])
-        e.configure("Chip.TButton", padding=(9, 5), font=mono())
+        e.configure("Chip.TButton", padding=(9, 5), font=(MONO, 10))
         e.configure("Treeview", rowheight=27, fieldbackground=BLANCO,
                     background=BLANCO, font=(FUENTE, 10))
         e.configure("Treeview.Heading", font=(FUENTE, 9, "bold"),
@@ -127,133 +120,216 @@ class App(tk.Tk):
                  font=(FUENTE, 19, "bold italic")).pack(anchor="w")
         tk.Label(cont, text="LONCOCHE  ·  CONTROL DE HORAS", bg=BLANCO, fg=SUAVE,
                  font=(FUENTE, 8, "bold")).pack(anchor="w", pady=(2, 0))
+        self.lbl_reloj = tk.Label(barra, text="", bg=BLANCO, fg=TINTA,
+                                  font=(MONO, 22, "bold"))
+        self.lbl_reloj.pack(side="right", padx=22)
         tk.Frame(self, bg=VERDE, height=3).pack(fill="x")
 
-    # ------------------------------------------------------ pestana Jornadas
+    def _latido(self):
+        """Reloj de la cabecera: la hora que se va a registrar al marcar."""
+        self.lbl_reloj.config(text=datetime.now().strftime("%H:%M:%S"))
+        self.after(1000, self._latido)
+
+    # ======================================================== pestana MARCAR
+    def _tab_marcar(self):
+        p = ttk.Frame(self, padding=16)
+        self.tabs.add(p, text="  Marcar  ")
+
+        tk.Label(p, text="1.  Toca tu nombre", bg=PAPEL, fg=SUAVE,
+                 font=(FUENTE, 10, "bold")).pack(anchor="w")
+        self.caja_nombres = tk.Frame(p, bg=PAPEL)
+        self.caja_nombres.pack(fill="x", pady=(8, 16))
+
+        self.panel = tk.Frame(p, bg=BLANCO, highlightbackground=LINEA,
+                              highlightthickness=1)
+        self.panel.pack(fill="both", expand=True)
+
+        self.lbl_quien = tk.Label(self.panel, text="", bg=BLANCO, fg=TINTA,
+                                  font=(FUENTE, 20, "bold"))
+        self.lbl_quien.pack(pady=(22, 2))
+        self.lbl_toca = tk.Label(self.panel, text="", bg=BLANCO, fg=SUAVE,
+                                 font=(FUENTE, 11))
+        self.lbl_toca.pack()
+        self.lbl_marca = tk.Label(self.panel, text="", bg=BLANCO, fg=ROJO,
+                                  font=(FUENTE, 30, "bold"))
+        self.lbl_marca.pack(pady=(2, 14))
+
+        self.btn_marcar = tk.Button(
+            self.panel, text="MARCAR", command=self.marcar,
+            bg=TINTA, fg=PAPEL, activebackground=ROJO, activeforeground=BLANCO,
+            font=(FUENTE, 17, "bold"), relief="flat", cursor="hand2",
+            padx=52, pady=17, state="disabled")
+        self.btn_marcar.pack()
+
+        self.lbl_hoy = tk.Label(self.panel, text="", bg=BLANCO, fg=SUAVE,
+                                font=(MONO, 11), justify="center")
+        self.lbl_hoy.pack(pady=(18, 6))
+        self.lbl_aviso = tk.Label(self.panel, text="", bg=BLANCO,
+                                  font=(FUENTE, 12, "bold"))
+        self.lbl_aviso.pack(pady=(0, 20))
+
+    def _pintar_nombres(self):
+        for w in self.caja_nombres.winfo_children():
+            w.destroy()
+        if not self._trabs:
+            tk.Label(self.caja_nombres, bg=PAPEL, fg=SUAVE, font=(FUENTE, 10),
+                     text="No hay trabajadores. Agregalos en la pestana "
+                          "Trabajadores.").pack(anchor="w")
+            return
+        for t in self._trabs:
+            elegido = self.sel_trab == t["id"]
+            b = tk.Button(
+                self.caja_nombres, text=t["nombre"],
+                command=lambda i=t["id"]: self.elegir(i),
+                bg=ROJO if elegido else BLANCO, fg=BLANCO if elegido else TINTA,
+                activebackground=ROJO if elegido else PAPEL,
+                font=(FUENTE, 13, "bold" if elegido else "normal"),
+                relief="flat", cursor="hand2", padx=22, pady=13,
+                highlightbackground=LINEA, highlightthickness=1)
+            b.pack(side="left", padx=(0, 8))
+
+    def elegir(self, tid):
+        self.sel_trab = tid
+        self.lbl_aviso.config(text="")
+        self._pintar_nombres()
+        self._pintar_panel()
+
+    def _pintar_panel(self):
+        if self.sel_trab is None:
+            self.lbl_quien.config(text="Elige tu nombre arriba")
+            self.lbl_toca.config(text="")
+            self.lbl_marca.config(text="")
+            self.lbl_hoy.config(text="")
+            self.btn_marcar.config(state="disabled", text="MARCAR")
+            return
+        t = [x for x in self._trabs if x["id"] == self.sel_trab]
+        if not t:
+            self.sel_trab = None
+            return self._pintar_panel()
+        est = self.datos.estado(self.sel_trab)
+        self.lbl_quien.config(text=t[0]["nombre"])
+
+        if est["completa"]:
+            self.lbl_toca.config(text="Ya marcaste las cuatro veces de hoy")
+            self.lbl_marca.config(text="JORNADA COMPLETA", fg=VERDE)
+            self.btn_marcar.config(state="disabled", text="NADA QUE MARCAR")
+        else:
+            self.lbl_toca.config(text="Vas a marcar:")
+            self.lbl_marca.config(text=est["etiqueta"].upper(), fg=ROJO)
+            self.btn_marcar.config(state="normal",
+                                   text="MARCAR  " + est["etiqueta"].upper())
+
+        hechas = dict((m["tipo"], m["hora"]) for m in est["marcas"])
+        partes = []
+        for tipo in N.TIPOS:
+            partes.append("%-18s %s" % (N.ETIQUETAS[tipo],
+                                        hechas.get(tipo, "--:--")))
+        resumen = "\n".join(partes)
+        if est["horas"]:
+            resumen += "\n\nLlevas %s h trabajadas" % N.horas_txt(est["horas"])
+        self.lbl_hoy.config(text=resumen)
+
+    def marcar(self):
+        if self.sel_trab is None:
+            return
+        try:
+            r = self.datos.marcar(self.sel_trab)
+        except ValueError as e:
+            return messagebox.showwarning("No se pudo marcar", str(e))
+        nombre = [x["nombre"] for x in self._trabs if x["id"] == self.sel_trab][0]
+        # Se suelta la seleccion al tiro: asi el siguiente que llegue no puede
+        # marcar por error a nombre del anterior.
+        self.sel_trab = None
+        self.recargar_todo()
+        self.lbl_aviso.config(
+            text="Listo, %s:  %s registrada a las %s" % (nombre, r["etiqueta"], r["hora"]),
+            fg=VERDE, bg=BLANCO)
+        self.after(9000, lambda: self.lbl_aviso.config(text=""))
+
+    # ====================================================== pestana JORNADAS
     def _tab_jornadas(self):
         p = ttk.Frame(self, padding=14)
         self.tabs.add(p, text="  Jornadas  ")
 
-        f = ttk.LabelFrame(p, text=" REGISTRAR UNA JORNADA ", padding=12)
+        f = ttk.Frame(p)
         f.pack(fill="x")
-
-        fila1 = ttk.Frame(f); fila1.pack(fill="x", pady=(0, 10))
-        ttk.Label(fila1, text="Trabajador", style="Rotulo.TLabel").grid(row=0, column=0, sticky="w")
-        self.cb_trab = ttk.Combobox(fila1, state="readonly", width=26, font=(FUENTE, 11))
-        self.cb_trab.grid(row=1, column=0, sticky="w", padx=(0, 18))
-
-        ttk.Label(fila1, text="Fecha", style="Rotulo.TLabel").grid(row=0, column=1, sticky="w")
-        self.e_fecha = ttk.Entry(fila1, width=13, font=mono(), justify="center")
-        self.e_fecha.grid(row=1, column=1, sticky="w", padx=(0, 4))
-        self.e_fecha.insert(0, date.today().isoformat())
-        bf = ttk.Frame(fila1); bf.grid(row=1, column=2, sticky="w", padx=(0, 18))
-        ttk.Button(bf, text="Hoy", style="Chip.TButton", width=5,
-                   command=lambda: self._set(self.e_fecha, date.today().isoformat())).pack(side="left", padx=1)
-        ttk.Button(bf, text="◀", style="Chip.TButton", width=3,
-                   command=lambda: self._mover_fecha(-1)).pack(side="left", padx=1)
-        ttk.Button(bf, text="▶", style="Chip.TButton", width=3,
-                   command=lambda: self._mover_fecha(1)).pack(side="left", padx=1)
-
-        ttk.Label(fila1, text="Colacion", style="Rotulo.TLabel").grid(row=0, column=3, sticky="w")
-        self.cb_col = ttk.Combobox(fila1, state="readonly", width=12, font=(FUENTE, 11),
-                                   values=["Sin colacion", "30 min", "45 min", "60 min"])
-        self.cb_col.current(3)
-        self.cb_col.grid(row=1, column=3, sticky="w")
-        self.cb_col.bind("<<ComboboxSelected>>", lambda e: self._vista_previa())
-
-        fila2 = ttk.Frame(f); fila2.pack(fill="x")
-        self.e_ent = self._campo_hora(fila2, "Hora de entrada", 0, ["08:00", "08:30", "09:00", "10:00"])
-        self.e_sal = self._campo_hora(fila2, "Hora de salida", 1, ["14:00", "18:00", "19:00", "20:00"])
-
-        fila3 = ttk.Frame(f); fila3.pack(fill="x", pady=(12, 0))
-        ttk.Label(fila3, text="Nota (opcional)", style="Rotulo.TLabel").pack(anchor="w")
-        self.e_nota = ttk.Entry(fila3, font=(FUENTE, 10))
-        self.e_nota.pack(fill="x", pady=(2, 0))
-
-        fila4 = tk.Frame(f, bg=PAPEL); fila4.pack(fill="x", pady=(12, 0))
-        self.lbl_previa = tk.Label(fila4, text="", bg=VERDE_CLARO, fg=VERDE,
-                                   font=(FUENTE, 12, "bold"), anchor="w", padx=14, pady=9)
-        self.lbl_previa.pack(side="left", fill="x", expand=True)
-        self.btn_guardar = ttk.Button(fila4, text="Guardar jornada",
-                                      style="Principal.TButton", command=self.guardar_jornada)
-        self.btn_guardar.pack(side="left", padx=(10, 0))
-        self.btn_cancelar = ttk.Button(fila4, text="Cancelar", command=self.limpiar_form)
-
-        lista = ttk.LabelFrame(p, text=" JORNADAS REGISTRADAS ", padding=10)
-        lista.pack(fill="both", expand=True, pady=(14, 0))
-        filtros = ttk.Frame(lista); filtros.pack(fill="x", pady=(0, 8))
-        ttk.Label(filtros, text="Mes", style="Rotulo.TLabel").pack(side="left", padx=(0, 6))
-        self.cb_mes_j = ttk.Combobox(filtros, state="readonly", width=18, font=(FUENTE, 10))
+        ttk.Label(f, text="Mes", style="Rotulo.TLabel").pack(side="left", padx=(0, 6))
+        self.cb_mes_j = ttk.Combobox(f, state="readonly", width=18, font=(FUENTE, 10))
         self.cb_mes_j.pack(side="left", padx=(0, 14))
         self.cb_mes_j.bind("<<ComboboxSelected>>", lambda e: self.recargar_jornadas())
-        ttk.Label(filtros, text="Trabajador", style="Rotulo.TLabel").pack(side="left", padx=(0, 6))
-        self.cb_filtro_trab = ttk.Combobox(filtros, state="readonly", width=22, font=(FUENTE, 10))
+        ttk.Label(f, text="Trabajador", style="Rotulo.TLabel").pack(side="left", padx=(0, 6))
+        self.cb_filtro_trab = ttk.Combobox(f, state="readonly", width=20, font=(FUENTE, 10))
         self.cb_filtro_trab.pack(side="left")
         self.cb_filtro_trab.bind("<<ComboboxSelected>>", lambda e: self.recargar_jornadas())
-        ttk.Button(filtros, text="Editar", command=self.editar_sel).pack(side="right", padx=3)
-        ttk.Button(filtros, text="Borrar", command=self.borrar_sel).pack(side="right", padx=3)
+        ttk.Button(f, text="Corregir marcas del dia", style="Principal.TButton",
+                   command=self.abrir_editor).pack(side="right")
 
-        cols = ("fecha", "dia", "trab", "ent", "sal", "col", "horas", "extra", "nota")
-        titulos = ["Fecha", "Dia", "Trabajador", "Entrada", "Salida",
-                   "Colacion", "Horas", "Extra", "Nota"]
-        anchos = [92, 88, 170, 76, 76, 78, 72, 68, 200]
-        self.tv_j = ttk.Treeview(lista, columns=cols, show="headings", selectmode="browse")
+        tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
+                 text="Doble clic sobre un dia para corregir sus marcas. Los dias "
+                      "a los que les falta alguna marca salen en ambar."
+                 ).pack(fill="x", pady=(8, 4))
+
+        cols = ("fecha", "dia", "trab", "e", "ci", "cf", "s", "horas", "estado")
+        titulos = ["Fecha", "Dia", "Trabajador", "Entrada", "Col. inicio",
+                   "Col. fin", "Salida", "Horas", "Estado"]
+        anchos = [88, 82, 150, 74, 82, 74, 70, 66, 170]
+        marco = ttk.Frame(p)
+        marco.pack(fill="both", expand=True)
+        self.tv_j = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse")
         for c, t, a in zip(cols, titulos, anchos):
             self.tv_j.heading(c, text=t)
-            self.tv_j.column(c, width=a, anchor="center" if c not in ("trab", "nota") else "w")
-        self.tv_j.tag_configure("extra", foreground=ROJO)
-        self.tv_j.tag_configure("par", background="#FAF8F6")
-        sb = ttk.Scrollbar(lista, orient="vertical", command=self.tv_j.yview)
+            self.tv_j.column(c, width=a, minwidth=a, stretch=(c in ("trab", "estado")),
+                             anchor="w" if c in ("trab", "estado") else "center")
+        self.tv_j.tag_configure("falta", background=AMBAR_CLARO, foreground=AMBAR)
+        sb = ttk.Scrollbar(marco, orient="vertical", command=self.tv_j.yview)
         self.tv_j.configure(yscrollcommand=sb.set)
         self.tv_j.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
-        self.tv_j.bind("<Double-1>", lambda e: self.editar_sel())
+        self.tv_j.bind("<Double-1>", lambda e: self.abrir_editor())
 
-    def _campo_hora(self, padre, rotulo, col, sugeridas):
-        caja = ttk.Frame(padre)
-        caja.grid(row=0, column=col, sticky="w", padx=(0, 26))
-        ttk.Label(caja, text=rotulo, style="Rotulo.TLabel").pack(anchor="w")
-        arriba = ttk.Frame(caja); arriba.pack(anchor="w", pady=(2, 4))
-        campo = ttk.Entry(arriba, width=8, font=(mono()[0], 15), justify="center")
-        campo.pack(side="left")
-        campo.bind("<KeyRelease>", lambda e: self._vista_previa())
-        ttk.Button(arriba, text="Ahora", style="Chip.TButton", width=6,
-                   command=lambda: self._ahora(campo)).pack(side="left", padx=(5, 0))
-        ttk.Button(arriba, text="−15", style="Chip.TButton", width=4,
-                   command=lambda: self._paso(campo, -15)).pack(side="left", padx=(5, 0))
-        ttk.Button(arriba, text="+15", style="Chip.TButton", width=4,
-                   command=lambda: self._paso(campo, 15)).pack(side="left", padx=2)
-        abajo = ttk.Frame(caja); abajo.pack(anchor="w")
-        for h in sugeridas:
-            ttk.Button(abajo, text=h, style="Chip.TButton", width=6,
-                       command=lambda v=h, c=campo: self._set(c, v)).pack(side="left", padx=2)
-        return campo
+    def abrir_editor(self):
+        sel = self.tv_j.selection()
+        if not sel:
+            return messagebox.showinfo("Elige un dia",
+                                       "Selecciona una fila de la lista.")
+        fecha, tid = sel[0].split("|")
+        EditorMarcas(self, int(tid), fecha)
 
-    # ------------------------------------------------------- pestana Resumen
+    # ======================================================= pestana RESUMEN
     def _tab_resumen(self):
         p = ttk.Frame(self, padding=14)
-        self.tabs.add(p, text="  Resumen del mes  ")
+        self.tabs.add(p, text="  Resumen y pago  ")
 
-        barra = ttk.Frame(p); barra.pack(fill="x")
-        ttk.Label(barra, text="Mes", style="Rotulo.TLabel").pack(side="left", padx=(0, 8))
-        self.cb_mes_r = ttk.Combobox(barra, state="readonly", width=20, font=(FUENTE, 11))
-        self.cb_mes_r.pack(side="left")
-        self.cb_mes_r.bind("<<ComboboxSelected>>", lambda e: self.recargar_resumen())
+        barra = ttk.Frame(p)
+        barra.pack(fill="x")
+        self.btn_sem = ttk.Button(barra, text="Semana", style="Principal.TButton",
+                                  command=lambda: self.cambiar_periodo("semana"))
+        self.btn_sem.pack(side="left")
+        self.btn_mes = ttk.Button(barra, text="Mes",
+                                  command=lambda: self.cambiar_periodo("mes"))
+        self.btn_mes.pack(side="left", padx=(6, 14))
+        ttk.Button(barra, text="◀", width=3, command=lambda: self.mover(-1)).pack(side="left")
+        ttk.Button(barra, text="▶", width=3, command=lambda: self.mover(1)).pack(side="left", padx=(4, 10))
+        ttk.Button(barra, text="Hoy", command=self.ir_hoy).pack(side="left")
         ttk.Button(barra, text="Exportar a Excel", style="Principal.TButton",
                    command=lambda: self.exportar("excel")).pack(side="right", padx=(8, 0))
         ttk.Button(barra, text="Exportar a PDF",
                    command=lambda: self.exportar("pdf")).pack(side="right")
 
-        cols = ("trab", "turnos", "horas", "col", "ord", "extra",
-                "vh", "vhe", "pord", "pext", "total")
-        titulos = ["Trabajador", "Turnos", "Horas", "Colacion", "H. ordinarias",
-                   "H. extra", "Valor hora", "Valor h. extra", "Pago ordinario",
-                   "Pago extra", "TOTAL"]
-        anchos = [148, 58, 68, 74, 88, 66, 82, 92, 98, 86, 104]
+        self.lbl_periodo = tk.Label(p, text="", bg=PAPEL, fg=TINTA,
+                                    font=(FUENTE, 14, "bold"), anchor="w")
+        self.lbl_periodo.pack(fill="x", pady=(12, 8))
+
         self.lbl_regla = tk.Label(p, text="", bg=PAPEL, fg=SUAVE, font=(FUENTE, 9),
                                   anchor="w", justify="left", wraplength=1040)
         self.lbl_regla.pack(side="bottom", fill="x", pady=(10, 0))
-        marco = ttk.Frame(p); marco.pack(fill="both", expand=True, pady=(12, 0))
+
+        cols = ("trab", "dias", "horas", "col", "ord", "extra", "vhe", "pext", "total")
+        titulos = ["Trabajador", "Dias", "Horas", "Colacion", "H. ordinarias",
+                   "H. EXTRA", "Valor h. extra", "PAGO EXTRA", "TOTAL"]
+        anchos = [150, 58, 74, 78, 96, 82, 100, 104, 108]
+        marco = ttk.Frame(p)
+        marco.pack(fill="both", expand=True)
         self.tv_r = ttk.Treeview(marco, columns=cols, show="headings", selectmode="none")
         for c, t, a in zip(cols, titulos, anchos):
             self.tv_r.heading(c, text=t)
@@ -263,8 +339,26 @@ class App(tk.Tk):
         self.tv_r.tag_configure("extra", foreground=ROJO)
         self.tv_r.pack(fill="both", expand=True)
 
+    def cambiar_periodo(self, cual):
+        self.periodo = cual
+        self.btn_sem.config(style="Principal.TButton" if cual == "semana" else "TButton")
+        self.btn_mes.config(style="Principal.TButton" if cual == "mes" else "TButton")
+        self.recargar_resumen()
 
-    # -------------------------------------------------- pestana Trabajadores
+    def mover(self, n):
+        d = datetime.strptime(self.ancla, "%Y-%m-%d").date()
+        if self.periodo == "semana":
+            self.ancla = (d + timedelta(days=7 * n)).isoformat()
+        else:
+            self.ancla = date(d.year + (d.month + n - 1) // 12,
+                              (d.month + n - 1) % 12 + 1, 1).isoformat()
+        self.recargar_resumen()
+
+    def ir_hoy(self):
+        self.ancla = date.today().isoformat()
+        self.recargar_resumen()
+
+    # ================================================== pestana TRABAJADORES
     def _tab_trabajadores(self):
         p = ttk.Frame(self, padding=14)
         self.tabs.add(p, text="  Trabajadores  ")
@@ -272,59 +366,54 @@ class App(tk.Tk):
         f = ttk.LabelFrame(p, text=" DATOS DEL TRABAJADOR ", padding=12)
         f.pack(fill="x")
         ttk.Label(f, text="Nombre", style="Rotulo.TLabel").grid(row=0, column=0, sticky="w")
-        self.e_tnombre = ttk.Entry(f, width=28, font=(FUENTE, 11))
+        self.e_tnombre = ttk.Entry(f, width=26, font=(FUENTE, 11))
         self.e_tnombre.grid(row=1, column=0, padx=(0, 16), sticky="w")
         ttk.Label(f, text="Valor hora normal ($)", style="Rotulo.TLabel").grid(row=0, column=1, sticky="w")
-        self.e_tvalor = ttk.Entry(f, width=14, font=mono(), justify="right")
+        self.e_tvalor = ttk.Entry(f, width=13, font=(MONO, 10), justify="right")
         self.e_tvalor.grid(row=1, column=1, padx=(0, 16), sticky="w")
         ttk.Label(f, text="Valor hora extra ($)", style="Rotulo.TLabel").grid(row=0, column=2, sticky="w")
-        self.e_tvalorx = ttk.Entry(f, width=14, font=mono(), justify="right")
+        self.e_tvalorx = ttk.Entry(f, width=13, font=(MONO, 10), justify="right")
         self.e_tvalorx.grid(row=1, column=2, padx=(0, 16), sticky="w")
         ttk.Label(f, text="solo si en Configuracion elegiste monto fijo;\n"
                           "en blanco usa el valor general",
-                  style="Rotulo.TLabel", foreground=SUAVE).grid(row=1, column=3, sticky="w")
-        botones = ttk.Frame(f); botones.grid(row=2, column=0, columnspan=4, sticky="w", pady=(12, 0))
-        ttk.Button(botones, text="Agregar nuevo", style="Principal.TButton",
+                  style="Rotulo.TLabel").grid(row=1, column=3, sticky="w")
+        b = ttk.Frame(f)
+        b.grid(row=2, column=0, columnspan=4, sticky="w", pady=(12, 0))
+        ttk.Button(b, text="Agregar nuevo", style="Principal.TButton",
                    command=self.agregar_trabajador).pack(side="left")
-        ttk.Button(botones, text="Guardar cambios del seleccionado",
+        ttk.Button(b, text="Guardar cambios del seleccionado",
                    command=self.guardar_trabajador).pack(side="left", padx=6)
-        ttk.Button(botones, text="Quitar de la lista",
+        ttk.Button(b, text="Quitar de la lista",
                    command=self.quitar_trabajador).pack(side="left")
 
         marco = ttk.LabelFrame(p, text=" TRABAJADORES ", padding=10)
         marco.pack(fill="both", expand=True, pady=(14, 0))
-        cols = ("nombre", "vh", "vhe", "jornadas")
+        cols = ("nombre", "vh", "vhe", "dias")
         self.tv_t = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse")
-        for c, t, a, al in zip(cols,
-                               ["Nombre", "Valor hora", "Valor hora extra", "Jornadas"],
-                               [240, 130, 150, 110], ["w", "e", "e", "e"]):
+        for c, t, a, al in zip(cols, ["Nombre", "Valor hora", "Valor hora extra",
+                                      "Dias trabajados"],
+                               [230, 130, 150, 130], ["w", "e", "e", "e"]):
             self.tv_t.heading(c, text=t)
             self.tv_t.column(c, width=a, anchor=al)
         self.tv_t.pack(fill="both", expand=True)
         self.tv_t.bind("<<TreeviewSelect>>", lambda e: self.cargar_trabajador_sel())
 
-    # -------------------------------------------------- pestana Configuracion
+    # =================================================== pestana CONFIGURACION
     def _tab_config(self):
         p = ttk.Frame(self, padding=14)
         self.tabs.add(p, text="  Configuracion  ")
 
-        a = ttk.LabelFrame(p, text=" CUANDO UNA HORA ES EXTRA ", padding=14)
+        a = ttk.LabelFrame(p, text=" JORNADA SEMANAL LEGAL ", padding=14)
         a.pack(fill="x")
-        ttk.Label(a, text="Umbral diario (horas)", style="Rotulo.TLabel").grid(
-            row=0, column=0, sticky="w", padx=(0, 20), pady=(0, 2))
-        self.e_ud = ttk.Entry(a, width=10, font=mono(), justify="right")
-        self.e_ud.grid(row=1, column=0, padx=(0, 20), sticky="w")
-        ttk.Label(a, text="Umbral semanal (horas)", style="Rotulo.TLabel").grid(
-            row=0, column=1, sticky="w", padx=(0, 20), pady=(0, 2))
-        self.e_us = ttk.Entry(a, width=10, font=mono(), justify="right")
-        self.e_us.grid(row=1, column=1, padx=(0, 20), sticky="w")
-        ttk.Label(a, text="Regla que se aplica", style="Rotulo.TLabel").grid(
-            row=0, column=2, sticky="w", pady=(0, 2))
-        self.cb_regla = ttk.Combobox(a, state="readonly", width=46, font=(FUENTE, 10), values=[
-            "Diaria  -  lo que pasa del umbral de cada dia",
-            "Semanal  -  lo que pasa del umbral de la semana",
-            "La mayor de las dos"])
-        self.cb_regla.grid(row=1, column=2, sticky="w")
+        ttk.Label(a, text="Horas semanales", style="Rotulo.TLabel").grid(
+            row=0, column=0, sticky="w", padx=(0, 12))
+        self.e_us = ttk.Entry(a, width=9, font=(MONO, 10), justify="right")
+        self.e_us.grid(row=1, column=0, padx=(0, 12), sticky="w")
+        tk.Label(a, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), justify="left", anchor="w",
+                 text="Todo lo que un trabajador haga por sobre estas horas EN LA SEMANA\n"
+                      "se paga como hora extra. Que un dia suelto se pase o quede corto\n"
+                      "no cambia el pago: lo que manda es el total semanal."
+                 ).grid(row=1, column=1, sticky="w")
 
         b = ttk.LabelFrame(p, text=" CUANTO VALE UNA HORA EXTRA ", padding=14)
         b.pack(fill="x", pady=(14, 0))
@@ -332,14 +421,14 @@ class App(tk.Tk):
         ttk.Radiobutton(b, text="Recargo sobre la hora normal", value="recargo",
                         variable=self.modo_extra, command=self._refrescar_modo
                         ).grid(row=0, column=0, sticky="w", pady=3)
-        self.e_recargo = ttk.Entry(b, width=8, font=mono(), justify="right")
+        self.e_recargo = ttk.Entry(b, width=8, font=(MONO, 10), justify="right")
         self.e_recargo.grid(row=0, column=1, padx=8)
         ttk.Label(b, text="%   (50 % es lo que fija la ley en Chile)",
                   style="Rotulo.TLabel").grid(row=0, column=2, sticky="w")
         ttk.Radiobutton(b, text="Monto fijo por hora extra", value="fijo",
                         variable=self.modo_extra, command=self._refrescar_modo
                         ).grid(row=1, column=0, sticky="w", pady=3)
-        self.e_vextra = ttk.Entry(b, width=10, font=mono(), justify="right")
+        self.e_vextra = ttk.Entry(b, width=10, font=(MONO, 10), justify="right")
         self.e_vextra.grid(row=1, column=1, padx=8)
         ttk.Label(b, text="$ por hora   (cada trabajador puede tener el suyo)",
                   style="Rotulo.TLabel").grid(row=1, column=2, sticky="w")
@@ -350,13 +439,18 @@ class App(tk.Tk):
         c = ttk.LabelFrame(p, text=" DATOS DEL NEGOCIO (salen en el informe) ", padding=14)
         c.pack(fill="x", pady=(14, 0))
         ttk.Label(c, text="Nombre", style="Rotulo.TLabel").grid(row=0, column=0, sticky="w")
-        self.e_negocio = ttk.Entry(c, width=34, font=(FUENTE, 11))
+        self.e_negocio = ttk.Entry(c, width=32, font=(FUENTE, 11))
         self.e_negocio.grid(row=1, column=0, padx=(0, 20), sticky="w")
         ttk.Label(c, text="Ciudad", style="Rotulo.TLabel").grid(row=0, column=1, sticky="w")
-        self.e_ciudad = ttk.Entry(c, width=22, font=(FUENTE, 11))
-        self.e_ciudad.grid(row=1, column=1, sticky="w")
+        self.e_ciudad = ttk.Entry(c, width=20, font=(FUENTE, 11))
+        self.e_ciudad.grid(row=1, column=1, padx=(0, 20), sticky="w")
+        ttk.Label(c, text="Jornada larga a destacar (h)", style="Rotulo.TLabel").grid(
+            row=0, column=2, sticky="w")
+        self.e_ud = ttk.Entry(c, width=8, font=(MONO, 10), justify="right")
+        self.e_ud.grid(row=1, column=2, sticky="w")
 
-        pie = ttk.Frame(p); pie.pack(fill="x", pady=(16, 0))
+        pie = ttk.Frame(p)
+        pie.pack(fill="x", pady=(16, 0))
         ttk.Button(pie, text="Guardar configuracion", style="Principal.TButton",
                    command=self.guardar_config).pack(side="left")
         ttk.Button(pie, text="Abrir carpeta de datos",
@@ -367,54 +461,19 @@ class App(tk.Tk):
                                  anchor="w", justify="left")
         self.lbl_ruta.pack(fill="x", pady=(12, 0))
 
-    # =========================================================== utilidades
+    # ============================================================= utilidades
     @staticmethod
     def _set(campo, valor):
         campo.delete(0, "end")
         campo.insert(0, valor)
 
-    def _ahora(self, campo):
-        ahora = datetime.now()
-        m = int(round((ahora.hour * 60 + ahora.minute) / 5.0)) * 5
-        self._set(campo, N.a_hhmm(m))
-        self._vista_previa()
-
-    def _paso(self, campo, delta):
-        base = N.a_minutos(campo.get())
-        if base is None:
-            ahora = datetime.now()
-            base = int(round((ahora.hour * 60 + ahora.minute) / 15.0)) * 15
-        else:
-            base += delta
-        self._set(campo, N.a_hhmm(base))
-        self._vista_previa()
-
-    def _mover_fecha(self, delta):
+    @staticmethod
+    def _numero(txt):
+        txt = (txt or "").replace(".", "").replace(",", ".").replace("$", "").strip()
         try:
-            d = datetime.strptime(self.e_fecha.get(), "%Y-%m-%d").date()
+            return float(txt or 0)
         except ValueError:
-            d = date.today()
-        self._set(self.e_fecha, (d + timedelta(days=delta)).isoformat())
-
-    def _colacion(self):
-        return COLACIONES[self.cb_col.current() if self.cb_col.current() >= 0 else 3]
-
-    def _vista_previa(self, *_):
-        e, s = self.e_ent.get(), self.e_sal.get()
-        if N.a_minutos(e) is None or N.a_minutos(s) is None:
-            self.lbl_previa.config(text="Falta la hora de entrada o de salida",
-                                   bg=VERDE_CLARO, fg=SUAVE)
-            return
-        h = N.horas_trabajadas(e, s, self._colacion())
-        x = N.extra_del_dia(h, self.datos.num("umbral_diario"))
-        if x > 0:
-            self.lbl_previa.config(
-                text="%s h trabajadas   ·   %s h extra" % (N.horas_txt(h), N.horas_txt(x)),
-                bg=ROJO_CLARO, fg=ROJO)
-        else:
-            self.lbl_previa.config(
-                text="%s h trabajadas   ·   dentro del umbral" % N.horas_txt(h),
-                bg=VERDE_CLARO, fg=VERDE)
+            raise ValueError("'%s' no es un monto valido." % txt)
 
     def _refrescar_modo(self):
         fijo = self.modo_extra.get() == "fijo"
@@ -422,9 +481,8 @@ class App(tk.Tk):
         self.e_vextra.config(state="normal" if fijo else "disabled")
         try:
             if fijo:
-                v = float(self.e_vextra.get() or 0)
-                self.lbl_ejemplo.config(
-                    text="Cada hora extra se paga %s" % N.pesos(v))
+                self.lbl_ejemplo.config(text="Cada hora extra se paga %s"
+                                             % N.pesos(float(self.e_vextra.get() or 0)))
             else:
                 r = float(self.e_recargo.get() or 0)
                 self.lbl_ejemplo.config(
@@ -433,9 +491,8 @@ class App(tk.Tk):
         except ValueError:
             self.lbl_ejemplo.config(text="Escribe un numero valido")
 
-    def _meses_disponibles(self):
-        js = self.datos.jornadas()
-        meses = sorted({j["fecha"][:7] for j in js}, reverse=True)
+    def _meses(self):
+        meses = sorted({j["fecha"][:7] for j in self.datos.jornadas()}, reverse=True)
         hoy = date.today().strftime("%Y-%m")
         if hoy not in meses:
             meses.insert(0, hoy)
@@ -447,65 +504,6 @@ class App(tk.Tk):
         return "%s de %s" % (N.nombre_mes(int(m)).capitalize(), a)
 
     # ============================================================== acciones
-    def guardar_jornada(self):
-        i = self.cb_trab.current()
-        if i < 0:
-            return messagebox.showwarning("Falta el trabajador",
-                                          "Elige a quien corresponde la jornada.")
-        try:
-            self.datos.guardar_jornada(
-                self.editando, self._trabs[i]["id"], self.e_fecha.get().strip(),
-                self.e_ent.get().strip(), self.e_sal.get().strip(),
-                self._colacion(), self.e_nota.get().strip())
-        except ValueError as err:
-            return messagebox.showerror("No se pudo guardar", str(err))
-        self.limpiar_form()
-        self.recargar_todo()
-
-    def limpiar_form(self):
-        self.editando = None
-        self._set(self.e_ent, ""); self._set(self.e_sal, "")
-        self._set(self.e_nota, "")
-        self.cb_col.current(3)
-        self.btn_guardar.config(text="Guardar jornada")
-        self.btn_cancelar.pack_forget()
-        self._vista_previa()
-
-    def editar_sel(self):
-        sel = self.tv_j.selection()
-        if not sel:
-            return messagebox.showinfo("Elige una jornada",
-                                       "Selecciona una fila de la lista.")
-        jid = int(sel[0])
-        j = [x for x in self.datos.jornadas() if x["id"] == jid]
-        if not j:
-            return
-        j = j[0]
-        self.editando = jid
-        for k, t in enumerate(self._trabs):
-            if t["id"] == j["trabajador_id"]:
-                self.cb_trab.current(k)
-        self._set(self.e_fecha, j["fecha"])
-        self._set(self.e_ent, j["entrada"]); self._set(self.e_sal, j["salida"])
-        self._set(self.e_nota, j.get("nota", ""))
-        col = int(j["colacion"] or 0)
-        self.cb_col.current(COLACIONES.index(col) if col in COLACIONES else 3)
-        self.btn_guardar.config(text="Guardar cambios")
-        self.btn_cancelar.pack(side="left", padx=(6, 0))
-        self._vista_previa()
-        self.tabs.select(0)
-
-    def borrar_sel(self):
-        sel = self.tv_j.selection()
-        if not sel:
-            return messagebox.showinfo("Elige una jornada",
-                                       "Selecciona una fila de la lista.")
-        v = self.tv_j.item(sel[0])["values"]
-        if messagebox.askyesno("Borrar jornada",
-                               "Borrar la jornada de %s del %s?" % (v[2], v[0])):
-            self.datos.borrar_jornada(int(sel[0]))
-            self.recargar_todo()
-
     def agregar_trabajador(self):
         try:
             self.datos.agregar_trabajador(self.e_tnombre.get(),
@@ -513,8 +511,8 @@ class App(tk.Tk):
                                           self._numero(self.e_tvalorx.get()))
         except ValueError as e:
             return messagebox.showerror("No se pudo agregar", str(e))
-        self._set(self.e_tnombre, ""); self._set(self.e_tvalor, "")
-        self._set(self.e_tvalorx, "")
+        for c in (self.e_tnombre, self.e_tvalor, self.e_tvalorx):
+            self._set(c, "")
         self.recargar_todo()
 
     def guardar_trabajador(self):
@@ -537,28 +535,21 @@ class App(tk.Tk):
                                        "Selecciona uno de la lista de abajo.")
         tid = int(sel[0])
         n = self.datos.jornadas_de(tid)
-        if messagebox.askyesno(
-                "Quitar de la lista",
-                "Se saca de la lista pero sus %d jornadas se conservan,\n"
-                "para que los informes de meses anteriores sigan cuadrando.\n\n"
-                "Continuar?" % n):
+        if messagebox.askyesno("Quitar de la lista",
+                               "Sale de la lista pero sus %d dias registrados se "
+                               "conservan, para que los informes anteriores sigan "
+                               "cuadrando.\n\nContinuar?" % n):
             self.datos.desactivar_trabajador(tid)
+            if self.sel_trab == tid:
+                self.sel_trab = None
             self.recargar_todo()
-
-    @staticmethod
-    def _numero(txt):
-        txt = (txt or "").replace(".", "").replace(",", ".").replace("$", "").strip()
-        try:
-            return float(txt or 0)
-        except ValueError:
-            raise ValueError("'%s' no es un monto valido." % txt)
 
     def guardar_config(self):
         try:
             cambios = {
-                "umbral_diario": self._numero(self.e_ud.get()) or 8,
                 "umbral_semanal": self._numero(self.e_us.get()) or 45,
-                "regla": ["diaria", "semanal", "mayor"][max(0, self.cb_regla.current())],
+                "umbral_diario": self._numero(self.e_ud.get()) or 8,
+                "regla": "semanal",
                 "modo_extra": self.modo_extra.get(),
                 "recargo_extra": self._numero(self.e_recargo.get()),
                 "valor_extra_global": self._numero(self.e_vextra.get()),
@@ -572,18 +563,21 @@ class App(tk.Tk):
         messagebox.showinfo("Listo", "Configuracion guardada.")
 
     def exportar(self, formato):
-        ym = self._ym_resumen()
-        anio, mes = int(ym[:4]), int(ym[5:7])
-        r = N.resumen_mensual(self.datos, anio, mes)
+        if self.periodo == "semana":
+            lunes = N.lunes_de(self.ancla)
+            r = N.resumen_semanal(self.datos, lunes)
+            nombre_base = "horas-semana-%s" % lunes
+        else:
+            d = datetime.strptime(self.ancla, "%Y-%m-%d").date()
+            r = N.resumen_mensual(self.datos, d.year, d.month)
+            nombre_base = "horas-%04d-%02d" % (d.year, d.month)
         if not r["filas"]:
-            return messagebox.showinfo("Mes sin datos",
-                                       "No hay jornadas registradas en ese mes.")
+            return messagebox.showinfo("Sin datos",
+                                       "No hay marcas registradas en ese periodo.")
         ext = "xlsx" if formato == "excel" else "pdf"
-        sugerido = "horas-%s-%04d-%02d.%s" % (
-            r["negocio"].lower().replace(" ", "-"), anio, mes, ext)
         ruta = filedialog.asksaveasfilename(
             title="Guardar informe", defaultextension="." + ext,
-            initialfile=sugerido,
+            initialfile="%s.%s" % (nombre_base, ext),
             filetypes=[("Excel", "*.xlsx")] if formato == "excel" else [("PDF", "*.pdf")])
         if not ruta:
             return
@@ -594,9 +588,8 @@ class App(tk.Tk):
             else:
                 informes.a_pdf(r, ruta)
         except Exception as e:
-            return messagebox.showerror(
-                "No se pudo crear el informe",
-                "%s\n\n%s" % (e, traceback.format_exc(limit=2)))
+            return messagebox.showerror("No se pudo crear el informe",
+                                        "%s\n\n%s" % (e, traceback.format_exc(limit=2)))
         if messagebox.askyesno("Informe listo",
                                "Se guardo en:\n%s\n\nQueres abrirlo ahora?" % ruta):
             self._abrir(ruta)
@@ -613,6 +606,9 @@ class App(tk.Tk):
         except Exception:
             pass
 
+    def abrir_carpeta_datos(self):
+        self._abrir(N.carpeta_datos())
+
     def copia_manual(self):
         ruta = filedialog.asksaveasfilename(
             title="Guardar copia de seguridad", defaultextension=".sqlite3",
@@ -624,35 +620,20 @@ class App(tk.Tk):
             self.datos.respaldar(ruta)
         except Exception as e:
             return messagebox.showerror("No se pudo copiar", str(e))
-        messagebox.showinfo("Copia guardada",
-                            "Se guardo una copia en:\n%s" % ruta)
-
-    def abrir_carpeta_datos(self):
-        self._abrir(N.carpeta_datos())
+        messagebox.showinfo("Copia guardada", "Se guardo una copia en:\n%s" % ruta)
 
     # ============================================================== recargas
-    def _ym_resumen(self):
-        t = self.cb_mes_r.get()
-        for ym in self._meses:
-            if self._mes_texto(ym) == t:
-                return ym
-        return date.today().strftime("%Y-%m")
-
     def recargar_todo(self):
         self._trabs = self.datos.trabajadores()
-        self.cb_trab["values"] = [t["nombre"] for t in self._trabs]
-        if self._trabs and self.cb_trab.current() < 0:
-            self.cb_trab.current(0)
+        self._pintar_nombres()
+        self._pintar_panel()
 
-        self._meses = self._meses_disponibles()
-        textos = [self._mes_texto(m) for m in self._meses]
-        for cb in (self.cb_mes_j, self.cb_mes_r):
-            actual = cb.get()
-            cb["values"] = ["Todos"] + textos if cb is self.cb_mes_j else textos
-            if actual in cb["values"]:
-                cb.set(actual)
-            else:
-                cb.current(0)
+        meses = self._meses()
+        textos = [self._mes_texto(m) for m in meses]
+        self._meses_lista = meses
+        actual = self.cb_mes_j.get()
+        self.cb_mes_j["values"] = ["Todos"] + textos
+        self.cb_mes_j.set(actual if actual in self.cb_mes_j["values"] else "Todos")
         actual = self.cb_filtro_trab.get()
         self.cb_filtro_trab["values"] = ["Todos"] + [t["nombre"] for t in self._trabs]
         self.cb_filtro_trab.set(actual if actual in self.cb_filtro_trab["values"] else "Todos")
@@ -661,7 +642,6 @@ class App(tk.Tk):
         self.recargar_resumen()
         self.recargar_trabajadores()
         self.recargar_config()
-        self._vista_previa()
 
     def recargar_jornadas(self):
         for f in self.tv_j.get_children():
@@ -669,54 +649,57 @@ class App(tk.Tk):
         t = self.cb_mes_j.get()
         desde = hasta = None
         if t != "Todos":
-            for ym in self._meses:
+            for ym in self._meses_lista:
                 if self._mes_texto(ym) == t:
                     a, m = int(ym[:4]), int(ym[5:7])
                     desde, hasta = "%s-01" % ym, "%s-%02d" % (ym, N.ultimo_dia(a, m))
         tid = None
-        nom = self.cb_filtro_trab.get()
         for x in self._trabs:
-            if x["nombre"] == nom:
+            if x["nombre"] == self.cb_filtro_trab.get():
                 tid = x["id"]
-        umbral = self.datos.num("umbral_diario")
-        for i, j in enumerate(self.datos.jornadas(desde, hasta, tid)):
-            h = N.horas_trabajadas(j["entrada"], j["salida"], j["colacion"])
-            x = N.extra_del_dia(h, umbral)
-            tags = []
-            if x > 0:
-                tags.append("extra")
-            elif i % 2:
-                tags.append("par")
-            self.tv_j.insert("", "end", iid=str(j["id"]), tags=tags, values=(
-                j["fecha"], N.nombre_dia(j["fecha"]), j["nombre"], j["entrada"],
-                j["salida"], "%d min" % int(j["colacion"] or 0),
-                N.horas_txt(h), N.horas_txt(x) if x else "-", j.get("nota", "")))
+        for j in self.datos.jornadas(desde, hasta, tid):
+            if j["completa"]:
+                estado = "completa"
+                tags = ()
+            else:
+                estado = "falta " + ", ".join(x.lower() for x in j["faltan"])
+                tags = ("falta",)
+            self.tv_j.insert("", "end", iid=j["id"], tags=tags, values=(
+                j["fecha"], N.nombre_dia(j["fecha"]), j["nombre"],
+                j["entrada"] or "--:--", j["colacion_inicio"] or "--:--",
+                j["colacion_fin"] or "--:--", j["salida"] or "--:--",
+                N.horas_txt(j["horas"]), estado))
 
     def recargar_resumen(self):
         for f in self.tv_r.get_children():
             self.tv_r.delete(f)
-        ym = self._ym_resumen()
-        r = N.resumen_mensual(self.datos, int(ym[:4]), int(ym[5:7]))
+        if self.periodo == "semana":
+            r = N.resumen_semanal(self.datos, N.lunes_de(self.ancla))
+            titulo = r["titulo"]
+            nota = ("Horas extra: lo que pasa de %s h en la semana (lunes a domingo). "
+                    "Valor de la hora extra: %s."
+                    % (N._limpio(r["semanales"]), r["regla_extra"]))
+        else:
+            d = datetime.strptime(self.ancla, "%Y-%m-%d").date()
+            r = N.resumen_mensual(self.datos, d.year, d.month)
+            titulo = r["titulo"]
+            nota = ("Horas extra del mes, calculadas semana a semana sobre %s h. "
+                    "Valor de la hora extra: %s."
+                    % (r["umbral_semanal"], r["regla_extra"]))
+        self.lbl_periodo.config(text=titulo)
+        self.lbl_regla.config(text=nota)
+
         for f in r["filas"]:
             self.tv_r.insert("", "end", tags=("extra",) if f["extra"] > 0 else (), values=(
-                f["nombre"], f["turnos"], N.horas_txt(f["horas"]),
+                f["nombre"], f.get("turnos", 0), N.horas_txt(f["horas"]),
                 N.horas_txt(f["colacion"]), N.horas_txt(f["ordinarias"]),
-                N.horas_txt(f["extra"]), N.pesos(f["valor_hora"]),
-                N.pesos(f["valor_extra"]), N.pesos(f["pago_ordinario"]),
+                N.horas_txt(f["extra"]), N.pesos(f["valor_extra"]),
                 N.pesos(f["pago_extra"]), N.pesos(f["total"])))
         t = r["totales"]
         self.tv_r.insert("", "end", tags=("total",), values=(
             "TOTAL", t["turnos"], N.horas_txt(t["horas"]), N.horas_txt(t["colacion"]),
-            N.horas_txt(t["ordinarias"]), N.horas_txt(t["extra"]), "", "",
-            N.pesos(t["pago_ordinario"]), N.pesos(t["pago_extra"]), N.pesos(t["total"])))
-        reglas = {"diaria": "lo que pasa del umbral diario",
-                  "semanal": "lo que pasa del umbral semanal",
-                  "mayor": "la mayor entre el criterio diario y el semanal"}
-        self.lbl_regla.config(
-            text="Horas extra: %s  (umbral %s h al dia, %s h a la semana).   "
-                 "Valor de la hora extra: %s."
-                 % (reglas.get(r["regla"], ""), r["umbral_diario"],
-                    r["umbral_semanal"], r["regla_extra"]))
+            N.horas_txt(t["ordinarias"]), N.horas_txt(t["extra"]), "",
+            N.pesos(t["pago_extra"]), N.pesos(t["total"])))
 
     def recargar_trabajadores(self):
         for f in self.tv_t.get_children():
@@ -740,12 +723,11 @@ class App(tk.Tk):
 
     def recargar_config(self):
         c = self.datos.config()
-        self._set(self.e_ud, N._limpio(c.get("umbral_diario", "8")))
         self._set(self.e_us, N._limpio(c.get("umbral_semanal", "45")))
-        self.cb_regla.current({"diaria": 0, "semanal": 1, "mayor": 2}.get(
-            c.get("regla", "diaria"), 0))
+        self._set(self.e_ud, N._limpio(c.get("umbral_diario", "8")))
         self.modo_extra.set(c.get("modo_extra", "recargo"))
-        self.e_recargo.config(state="normal"); self.e_vextra.config(state="normal")
+        self.e_recargo.config(state="normal")
+        self.e_vextra.config(state="normal")
         self._set(self.e_recargo, N._limpio(c.get("recargo_extra", "50")))
         self._set(self.e_vextra, N._limpio(c.get("valor_extra_global", "0")))
         self._set(self.e_negocio, c.get("negocio", N.NEGOCIO_DEF))
@@ -753,19 +735,119 @@ class App(tk.Tk):
         self._refrescar_modo()
         fecha, cuantos = self.datos.ultimo_respaldo()
         self.lbl_ruta.config(
-            text="Los datos se guardan en:  %s\n"
-                 "Hay %d jornadas registradas.\n"
-                 "%s"
-                 % (self.datos.ruta, self.datos.total_jornadas(),
-                    ("Respaldo automatico: ultima copia del %s, %d guardadas "
-                     "(se conservan los ultimos 30 dias)." % (fecha, cuantos))
-                    if fecha else "Todavia no hay respaldos."))
+            text="Los datos se guardan en:  %s\n%d marcas en %d dias registrados.\n%s"
+                 % (self.datos.ruta, self.datos.total_marcas(),
+                    self.datos.total_jornadas(),
+                    ("Respaldo automatico: ultima copia del %s, %d guardadas."
+                     % (fecha, cuantos)) if fecha else "Todavia no hay respaldos."))
+
+
+# ------------------------------------------------- corregir marcas de un dia
+class EditorMarcas(tk.Toplevel):
+    """Ventanita para que el administrador arregle las marcas de un dia."""
+
+    def __init__(self, padre, tid, fecha):
+        tk.Toplevel.__init__(self, padre)
+        self.padre = padre
+        self.datos = padre.datos
+        self.tid = tid
+        self.fecha = fecha
+        nombre = next((t["nombre"] for t in self.datos.trabajadores(solo_activos=False)
+                       if t["id"] == tid), "?")
+        self.title("Corregir marcas  -  %s  -  %s" % (nombre, fecha))
+        self.configure(bg=PAPEL)
+        self.resizable(False, False)
+        self.transient(padre)
+        self.grab_set()
+
+        tk.Label(self, text=nombre, bg=PAPEL, fg=TINTA,
+                 font=(FUENTE, 15, "bold")).pack(anchor="w", padx=18, pady=(16, 0))
+        tk.Label(self, text="%s, %s" % (N.nombre_dia(fecha), fecha), bg=PAPEL,
+                 fg=SUAVE, font=(FUENTE, 10)).pack(anchor="w", padx=18)
+
+        self.caja = tk.Frame(self, bg=PAPEL)
+        self.caja.pack(padx=18, pady=14)
+        self.lbl_total = tk.Label(self, text="", bg=PAPEL, fg=VERDE,
+                                  font=(FUENTE, 12, "bold"))
+        self.lbl_total.pack(pady=(0, 6))
+        tk.Label(self, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), justify="left",
+                 text="Escribe la hora como 14:30 y presiona Guardar. Deja el campo\n"
+                      "vacio y guarda para borrar esa marca."
+                 ).pack(padx=18, pady=(0, 10))
+
+        pie = tk.Frame(self, bg=PAPEL)
+        pie.pack(fill="x", padx=18, pady=(0, 16))
+        ttk.Button(pie, text="Guardar", style="Principal.TButton",
+                   command=self.guardar).pack(side="left")
+        ttk.Button(pie, text="Cerrar", command=self.destroy).pack(side="left", padx=6)
+        ttk.Button(pie, text="Borrar el dia completo",
+                   command=self.borrar_dia).pack(side="right")
+
+        self.campos = {}
+        self._pintar()
+        self.update_idletasks()
+        x = padre.winfo_rootx() + (padre.winfo_width() - self.winfo_width()) // 2
+        y = padre.winfo_rooty() + 90
+        self.geometry("+%d+%d" % (max(0, x), max(0, y)))
+
+    def _pintar(self):
+        for w in self.caja.winfo_children():
+            w.destroy()
+        self.campos = {}
+        marcas = self.datos.marcas_de(self.tid, self.fecha)
+        por_tipo = dict((m["tipo"], m) for m in marcas)
+        for i, tipo in enumerate(N.TIPOS):
+            tk.Label(self.caja, text=N.ETIQUETAS[tipo], bg=PAPEL, fg=TINTA,
+                     font=(FUENTE, 11), anchor="w", width=18).grid(
+                row=i, column=0, sticky="w", pady=4)
+            e = ttk.Entry(self.caja, width=9, font=(MONO, 14), justify="center")
+            e.grid(row=i, column=1, padx=8)
+            if tipo in por_tipo:
+                e.insert(0, por_tipo[tipo]["hora"])
+            self.campos[tipo] = e
+            origen = por_tipo.get(tipo, {}).get("origen", "")
+            tk.Label(self.caja, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9),
+                     text={"app": "marcada en la app", "manual": "corregida a mano",
+                           "migrado": "viene del formato anterior",
+                           "biometrico": "reloj biometrico"}.get(origen, "falta")
+                     ).grid(row=i, column=2, sticky="w")
+        self.lbl_total.config(text="Horas del dia: %s"
+                                   % N.horas_txt(N.horas_de_marcas(marcas)))
+
+    def guardar(self):
+        marcas = self.datos.marcas_de(self.tid, self.fecha)
+        por_tipo = dict((m["tipo"], m) for m in marcas)
+        try:
+            for tipo, campo in self.campos.items():
+                texto = campo.get().strip()
+                if not texto:
+                    if tipo in por_tipo:
+                        self.datos.borrar_marca(por_tipo[tipo]["id"])
+                    continue
+                if tipo in por_tipo:
+                    if texto != por_tipo[tipo]["hora"]:
+                        self.datos.editar_marca(por_tipo[tipo]["id"], hora=texto)
+                else:
+                    self.datos.agregar_marca(self.tid, self.fecha, tipo, texto)
+        except ValueError as e:
+            return messagebox.showerror("No se pudo guardar", str(e), parent=self)
+        self._pintar()
+        self.padre.recargar_todo()
+
+    def borrar_dia(self):
+        if not messagebox.askyesno("Borrar el dia",
+                                   "Se borran las marcas de ese dia. Seguro?",
+                                   parent=self):
+            return
+        for m in self.datos.marcas_de(self.tid, self.fecha):
+            self.datos.borrar_marca(m["id"])
+        self.padre.recargar_todo()
+        self.destroy()
 
 
 def main():
     try:
-        app = App()
-        app.mainloop()
+        App().mainloop()
     except Exception:
         try:
             import tkinter.messagebox as mb

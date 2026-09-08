@@ -16,23 +16,41 @@ COMO SE USA
    Ponles el nombre real y cuanto vale su hora normal.
 
 2. CONFIGURACION
-   - Desde cuantas horas se cuenta como extra (viene 8 al dia, 45 a la semana).
+   - Horas semanales legales (viene 45). Todo lo que se pase de ahi
+     en la semana se paga como hora extra.
    - Cuanto vale la hora extra. Dos opciones:
        * Recargo sobre la hora normal (50 % es lo que fija la ley en Chile).
        * Un monto fijo en pesos que tu escribes.
      Si eliges monto fijo, cada trabajador puede tener el suyo propio.
 
-3. JORNADAS
-   Cargas la entrada y la salida de cada dia. Para ir mas rapido:
-   el boton "Ahora" pone la hora actual, "+15" y "-15" ajustan de a
-   cuarto de hora, y los botones con horas ponen las mas usadas.
-   Abajo se ve al tiro cuantas horas son y si hay extra.
+3. MARCAR  (esta es la pantalla del dia a dia)
+   El trabajador toca su nombre y presiona MARCAR. La aplicacion sola
+   sabe cual de las cuatro marcas del dia le toca, en este orden:
 
-4. RESUMEN DEL MES
-   Eliges el mes y ves el cuadro completo: turnos, horas, colacion,
-   horas extra y cuanto se paga.
-   Los botones "Exportar a Excel" y "Exportar a PDF" generan el
-   informe listo para imprimir.
+       entrada  ->  inicio colacion  ->  fin colacion  ->  salida
+
+   Antes de presionar, la pantalla dice en grande que va a registrar
+   ("VAS A MARCAR: ENTRADA"), y despues confirma con la hora exacta.
+
+   La hora la pone el reloj del computador, no se escribe a mano.
+
+   Cada trabajador lleva su propia cuenta. Si Pepito marca entrada y
+   despues llega Juanito, Juanito tambien parte por su entrada: no se
+   mezclan nunca. Ademas, apenas alguien marca se suelta la seleccion,
+   para que el siguiente no marque por error a nombre del anterior.
+
+4. JORNADAS
+   El detalle de cada dia con sus cuatro marcas y las horas trabajadas.
+   Los dias a los que les falta alguna marca salen en ambar.
+   Doble clic sobre un dia para corregir las horas a mano, si alguien
+   se olvido de marcar o marco a destiempo.
+
+5. RESUMEN Y PAGO
+   Por semana o por mes. Las HORAS EXTRA son las que se pasan de la
+   jornada semanal legal que configuraste: lo que manda es el total de
+   la semana, no si un dia suelto se paso o quedo corto.
+   Los botones "Exportar a Excel" y "Exportar a PDF" generan el informe
+   listo para imprimir.
 
 
 DONDE QUEDAN LOS DATOS

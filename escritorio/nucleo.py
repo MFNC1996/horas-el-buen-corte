@@ -15,15 +15,27 @@ NEGOCIO_DEF = "Carniceria El Buen Corte"
 CIUDAD_DEF = "Loncoche"
 
 CONFIG_DEF = {
-    "umbral_diario": "8",
-    "umbral_semanal": "45",
-    "regla": "diaria",          # diaria | semanal | mayor
+    "umbral_diario": "8",          # solo para destacar dias largos; no define el pago
+    "umbral_semanal": "45",        # jornada semanal legal: de aqui salen las horas extra
+    "regla": "semanal",         # el pago sale del excedente SEMANAL
     "modo_extra": "recargo",    # recargo (% sobre la hora normal) | fijo (monto en pesos)
     "recargo_extra": "50",      # % sobre el valor hora, si modo_extra=recargo
     "valor_extra_global": "0",  # $ por hora extra, si modo_extra=fijo
     "negocio": NEGOCIO_DEF,
     "ciudad": CIUDAD_DEF,
 }
+
+# Las cuatro marcas del dia, SIEMPRE en este orden.
+TIPOS = ["entrada", "colacion_inicio", "colacion_fin", "salida"]
+ETIQUETAS = {
+    "entrada":         "Entrada",
+    "colacion_inicio": "Inicio de colacion",
+    "colacion_fin":    "Fin de colacion",
+    "salida":          "Salida",
+}
+# Si alguien marco entrada y se fue sin marcar salida, a las tantas horas
+# dejamos de considerar esa jornada abierta y la siguiente marca empieza una nueva.
+HORAS_JORNADA_ABIERTA = 20
 
 DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -81,6 +93,34 @@ def horas_trabajadas(entrada, salida, colacion_min):
 
 def extra_del_dia(horas, umbral_diario):
     return round(max(0.0, horas - float(umbral_diario)), 2)
+
+
+def horas_de_marcas(marcas):
+    """
+    Horas efectivas de un dia a partir de sus marcas.
+
+    Necesita entrada y salida. Si estan las dos de colacion, se descuenta ese
+    rato. Cada tramo se mide con el resto de 24 h, asi que un turno que cruza
+    la medianoche (22:00 a 06:00) sale bien.
+    """
+    por_tipo = {}
+    for m in marcas:
+        por_tipo[m["tipo"]] = m["hora"]
+    if "entrada" not in por_tipo or "salida" not in por_tipo:
+        return 0.0
+    bruto = minutos_turno(por_tipo["entrada"], por_tipo["salida"])
+    colacion = 0
+    if "colacion_inicio" in por_tipo and "colacion_fin" in por_tipo:
+        colacion = minutos_turno(por_tipo["colacion_inicio"], por_tipo["colacion_fin"])
+    return round(max(0, bruto - colacion) / 60.0, 2)
+
+
+def minutos_colacion(marcas):
+    """Minutos de colacion de un dia, 0 si no estan las dos marcas."""
+    por_tipo = dict((m["tipo"], m["hora"]) for m in marcas)
+    if "colacion_inicio" in por_tipo and "colacion_fin" in por_tipo:
+        return minutos_turno(por_tipo["colacion_inicio"], por_tipo["colacion_fin"])
+    return 0
 
 
 def lunes_de(iso):
@@ -146,6 +186,18 @@ class Datos(object):
                        colacion      INTEGER NOT NULL DEFAULT 0,
                        nota          TEXT    NOT NULL DEFAULT '')""")
         c.execute("CREATE INDEX IF NOT EXISTS ix_jornadas_fecha ON jornadas(fecha)")
+        # Una fila por marca. Es el formato que tambien podria alimentar un
+        # reloj biometrico mas adelante: basta con insertar aqui.
+        c.execute("""CREATE TABLE IF NOT EXISTS marcas (
+                       id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                       trabajador_id INTEGER NOT NULL REFERENCES trabajadores(id),
+                       fecha         TEXT    NOT NULL,   -- dia laboral (el de la entrada)
+                       tipo          TEXT    NOT NULL,   -- entrada|colacion_inicio|colacion_fin|salida
+                       hora          TEXT    NOT NULL,   -- HH:MM, editable por el administrador
+                       origen        TEXT    NOT NULL DEFAULT 'app',
+                       registrado_en TEXT    NOT NULL DEFAULT '',
+                       nota          TEXT    NOT NULL DEFAULT '')""")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_marcas ON marcas(trabajador_id, fecha)")
         # Migracion para bases creadas antes de que existiera el valor fijo.
         columnas = [f[1] for f in c.execute("PRAGMA table_info(trabajadores)")]
         if "valor_hora_extra" not in columnas:
@@ -157,6 +209,7 @@ class Datos(object):
         for k, v in CONFIG_DEF.items():
             c.execute("INSERT OR IGNORE INTO config VALUES (?,?)", (k, v))
         c.commit()
+        self.migrar_jornadas_a_marcas()
 
     def cerrar(self):
         self.cx.close()
@@ -218,7 +271,8 @@ class Datos(object):
 
     def jornadas_de(self, tid):
         return self.cx.execute(
-            "SELECT COUNT(*) FROM jornadas WHERE trabajador_id=?", (tid,)).fetchone()[0]
+            "SELECT COUNT(DISTINCT fecha) FROM marcas WHERE trabajador_id=?",
+            (tid,)).fetchone()[0]
 
     # -- jornadas -------------------------------------------------------
     def guardar_jornada(self, jid, tid, fecha, entrada, salida, colacion, nota=""):
@@ -245,21 +299,224 @@ class Datos(object):
         self.cx.execute("DELETE FROM jornadas WHERE id=?", (jid,))
         self.cx.commit()
 
-    def jornadas(self, desde=None, hasta=None, tid=None):
-        sql = ("SELECT j.*, t.nombre, t.valor_hora, t.valor_hora_extra FROM jornadas j "
-               "JOIN trabajadores t ON t.id = j.trabajador_id WHERE 1=1")
+    # ================================================================
+    #  MARCAS
+    #  Que le toca marcar a alguien se calcula SIEMPRE desde el historial
+    #  del trabajador que se pasa por parametro. No hay estado global ni
+    #  compartido, asi que dos personas marcando alternadamente no se
+    #  pueden mezclar. Esto importa: de aqui sale el pago.
+    # ================================================================
+
+    def marcas_de(self, tid, fecha):
+        """Las marcas de ese trabajador en ese dia laboral, en orden."""
+        return [dict(f) for f in self.cx.execute(
+            "SELECT * FROM marcas WHERE trabajador_id=? AND fecha=? "
+            "ORDER BY id", (tid, fecha))]
+
+    def _dia_laboral(self, tid, ahora):
+        """
+        A que dia laboral pertenece la proxima marca de ESTE trabajador.
+
+        Si tiene una jornada empezada y sin cerrar, la marca sigue en ese dia
+        aunque el calendario ya haya cambiado: asi un turno de noche (entra
+        22:00, sale 06:00) queda entero en un solo dia laboral.
+        """
+        fila = self.cx.execute(
+            "SELECT fecha FROM marcas WHERE trabajador_id=? "
+            "ORDER BY fecha DESC, id DESC LIMIT 1", (tid,)).fetchone()
+        hoy = ahora.date().isoformat()
+        if not fila:
+            return hoy
+        fecha = fila["fecha"]
+        marcas = self.marcas_de(tid, fecha)
+        if self.proxima_de(set(m["tipo"] for m in marcas)) is None:
+            return hoy                                   # jornada completa
+        entrada = [m for m in marcas if m["tipo"] == "entrada"]
+        if entrada:
+            ini = datetime.strptime(fecha + " " + entrada[0]["hora"], "%Y-%m-%d %H:%M")
+            if (ahora - ini).total_seconds() > HORAS_JORNADA_ABIERTA * 3600:
+                return hoy                               # se quedo abierta, se abandona
+        return fecha
+
+    @staticmethod
+    def proxima_de(tipos_presentes):
+        """La primera de las cuatro que falta. None si ya estan todas."""
+        for t in TIPOS:
+            if t not in tipos_presentes:
+                return t
+        return None
+
+    def estado(self, tid, ahora=None):
+        """Que le toca marcar a este trabajador, y como va su dia."""
+        ahora = ahora or datetime.now()
+        fecha = self._dia_laboral(tid, ahora)
+        marcas = self.marcas_de(tid, fecha)
+        proxima = self.proxima_de(set(m["tipo"] for m in marcas))
+        return {
+            "trabajador_id": tid, "fecha": fecha, "marcas": marcas,
+            "proxima": proxima, "etiqueta": ETIQUETAS.get(proxima, ""),
+            "completa": proxima is None,
+            "horas": horas_de_marcas(marcas),
+        }
+
+    def marcar(self, tid, ahora=None, origen="app"):
+        """
+        Registra la marca que corresponda, con la hora del reloj del sistema.
+
+        Cual es no se elige: sale del historial propio del trabajador, asi que
+        desde el boton es imposible marcar fuera de orden.
+
+        `origen` queda guardado para cuando las marcas lleguen de un reloj
+        biometrico en vez de la pantalla.
+        """
+        ahora = ahora or datetime.now()
+        est = self.estado(tid, ahora)
+        if est["completa"]:
+            raise ValueError(
+                "Ya estan las cuatro marcas del dia %s. Si algo quedo mal, "
+                "corrigelo en la pestana Jornadas." % est["fecha"])
+        self.cx.execute(
+            "INSERT INTO marcas (trabajador_id, fecha, tipo, hora, origen, registrado_en) "
+            "VALUES (?,?,?,?,?,?)",
+            (tid, est["fecha"], est["proxima"], ahora.strftime("%H:%M"),
+             origen, ahora.strftime("%Y-%m-%d %H:%M:%S")))
+        self.cx.commit()
+        return {"tipo": est["proxima"], "etiqueta": ETIQUETAS[est["proxima"]],
+                "hora": ahora.strftime("%H:%M"), "fecha": est["fecha"]}
+
+    # -- correcciones del administrador ---------------------------------
+    def editar_marca(self, mid, hora=None, tipo=None):
+        m = self.cx.execute("SELECT * FROM marcas WHERE id=?", (mid,)).fetchone()
+        if not m:
+            raise ValueError("Esa marca ya no existe.")
+        m = dict(m)
+        if hora is not None:
+            if a_minutos(hora) is None:
+                raise ValueError("'%s' no es una hora valida. Escribela como 14:30." % hora)
+            m["hora"] = hora
+        if tipo is not None:
+            if tipo not in TIPOS:
+                raise ValueError("Tipo de marca desconocido.")
+            if tipo != m["tipo"] and any(
+                    x["tipo"] == tipo and x["id"] != mid
+                    for x in self.marcas_de(m["trabajador_id"], m["fecha"])):
+                raise ValueError("Ese dia ya tiene una marca de %s. "
+                                 "Corrige o borra la otra primero." % ETIQUETAS[tipo])
+            m["tipo"] = tipo
+        self.cx.execute("UPDATE marcas SET hora=?, tipo=?, origen='manual' WHERE id=?",
+                        (m["hora"], m["tipo"], mid))
+        self.cx.commit()
+
+    def agregar_marca(self, tid, fecha, tipo, hora):
+        """Para cuando a alguien se le olvido marcar y hay que agregarla."""
+        if tipo not in TIPOS:
+            raise ValueError("Tipo de marca desconocido.")
+        if a_minutos(hora) is None:
+            raise ValueError("'%s' no es una hora valida. Escribela como 14:30." % hora)
+        datetime.strptime(fecha, "%Y-%m-%d")
+        if any(m["tipo"] == tipo for m in self.marcas_de(tid, fecha)):
+            raise ValueError("Ese dia ya tiene una marca de %s." % ETIQUETAS[tipo])
+        self.cx.execute(
+            "INSERT INTO marcas (trabajador_id, fecha, tipo, hora, origen, registrado_en) "
+            "VALUES (?,?,?,?,'manual',?)",
+            (tid, fecha, tipo, hora, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        self.cx.commit()
+
+    def borrar_marca(self, mid):
+        self.cx.execute("DELETE FROM marcas WHERE id=?", (mid,))
+        self.cx.commit()
+
+    def marcas(self, desde=None, hasta=None, tid=None):
+        sql = ("SELECT m.*, t.nombre FROM marcas m "
+               "JOIN trabajadores t ON t.id = m.trabajador_id WHERE 1=1")
         p = []
         if desde:
-            sql += " AND j.fecha >= ?"; p.append(desde)
+            sql += " AND m.fecha >= ?"; p.append(desde)
         if hasta:
-            sql += " AND j.fecha <= ?"; p.append(hasta)
+            sql += " AND m.fecha <= ?"; p.append(hasta)
         if tid:
-            sql += " AND j.trabajador_id = ?"; p.append(tid)
-        sql += " ORDER BY j.fecha DESC, t.orden, j.id DESC"
+            sql += " AND m.trabajador_id = ?"; p.append(tid)
+        sql += " ORDER BY m.fecha DESC, t.orden, m.id"
         return [dict(f) for f in self.cx.execute(sql, p)]
 
+    # -- dias armados desde las marcas ----------------------------------
+    def jornadas(self, desde=None, hasta=None, tid=None):
+        """
+        Un dia por trabajador, armado desde sus cuatro marcas.
+
+        Devuelve la misma forma que usaba el formato viejo (entrada, salida,
+        minutos de colacion), para que los resumenes y los informes no tengan
+        que saber que por debajo ahora hay marcas.
+        """
+        por_dia = {}
+        for m in self.marcas(desde, hasta, tid):
+            clave = (m["fecha"], m["trabajador_id"])
+            por_dia.setdefault(clave, []).append(m)
+
+        trabajadores = dict((t["id"], t) for t in self.trabajadores(solo_activos=False))
+        salida = []
+        for (fecha, tid_), marcas in por_dia.items():
+            t = trabajadores.get(tid_, {})
+            por_tipo = dict((x["tipo"], x["hora"]) for x in marcas)
+            salida.append({
+                "id": "%s|%s" % (fecha, tid_),
+                "trabajador_id": tid_,
+                "nombre": t.get("nombre", "?"),
+                "valor_hora": t.get("valor_hora", 0),
+                "valor_hora_extra": t.get("valor_hora_extra", 0),
+                "fecha": fecha,
+                "entrada": por_tipo.get("entrada", ""),
+                "salida": por_tipo.get("salida", ""),
+                "colacion": minutos_colacion(marcas),
+                "colacion_inicio": por_tipo.get("colacion_inicio", ""),
+                "colacion_fin": por_tipo.get("colacion_fin", ""),
+                "horas": horas_de_marcas(marcas),
+                "dia": nombre_dia(fecha),
+                "extra_dia": 0.0,          # el pago es semanal; se llena para el informe
+                "marcas": marcas,
+                "completa": self.proxima_de(set(por_tipo)) is None,
+                "faltan": [ETIQUETAS[t2] for t2 in TIPOS if t2 not in por_tipo],
+                "nota": "",
+            })
+        salida.sort(key=lambda d: (d["fecha"], d["nombre"]), reverse=True)
+        return salida
+
     def total_jornadas(self):
-        return self.cx.execute("SELECT COUNT(*) FROM jornadas").fetchone()[0]
+        return len(set((m["fecha"], m["trabajador_id"])
+                       for m in self.cx.execute(
+                           "SELECT fecha, trabajador_id FROM marcas")))
+
+    def total_marcas(self):
+        return self.cx.execute("SELECT COUNT(*) FROM marcas").fetchone()[0]
+
+    def migrar_jornadas_a_marcas(self):
+        """
+        Pasa las jornadas del formato viejo (una fila con entrada, salida y
+        minutos de colacion) a cuatro marcas. La colacion se ubica al medio del
+        turno, porque el formato viejo no guardaba a que hora habia sido.
+        """
+        hechas = 0
+        for j in self.cx.execute("SELECT * FROM jornadas ORDER BY fecha, id").fetchall():
+            j = dict(j)
+            if self.marcas_de(j["trabajador_id"], j["fecha"]):
+                continue                                   # ya migrada
+            ent = a_minutos(j["entrada"])
+            if ent is None or a_minutos(j["salida"]) is None:
+                continue
+            bruto = minutos_turno(j["entrada"], j["salida"])
+            col = int(j["colacion"] or 0)
+            puestas = [("entrada", ent), ("salida", ent + bruto)]
+            if 0 < col < bruto:
+                medio = ent + (bruto - col) // 2
+                puestas += [("colacion_inicio", medio), ("colacion_fin", medio + col)]
+            for tipo, minutos in puestas:
+                self.cx.execute(
+                    "INSERT INTO marcas (trabajador_id, fecha, tipo, hora, origen, "
+                    "registrado_en) VALUES (?,?,?,?,'migrado','')",
+                    (j["trabajador_id"], j["fecha"], tipo, a_hhmm(minutos)))
+            hechas += 1
+        self.cx.commit()
+        return hechas
 
     # -- respaldos ------------------------------------------------------
     def carpeta_respaldos(self):
@@ -368,7 +625,7 @@ def _extras_por_semana(jornadas, cfg):
     """
     umbral_d = float(cfg.get("umbral_diario", 8) or 8)
     umbral_s = float(cfg.get("umbral_semanal", 45) or 45)
-    regla = str(cfg.get("regla", "diaria"))
+    regla = str(cfg.get("regla", "semanal"))
 
     semanas = {}
     for j in jornadas:
@@ -484,5 +741,76 @@ def resumen_mensual(datos, anio, mes):
         "regla_extra": texto_regla_extra(cfg),
         "umbral_diario": _limpio(cfg.get("umbral_diario", "8")),
         "umbral_semanal": _limpio(cfg.get("umbral_semanal", "45")),
-        "regla": str(cfg.get("regla", "diaria")),
+        "regla": str(cfg.get("regla", "semanal")),
     }
+
+
+# ------------------------------------------------------- resumen de la semana
+def resumen_semanal(datos, lunes):
+    """
+    La semana de un vistazo, por trabajador.
+
+    Es el calculo que define el pago: las horas extra son las que exceden la
+    jornada semanal legal configurada. Que un dia suelto se haya pasado o
+    quedado corto no cambia nada; lo que manda es el total de la semana.
+
+    Ademas devuelve el detalle dia por dia, como informacion complementaria.
+    """
+    cfg = datos.config()
+    domingo = (datetime.strptime(lunes, "%Y-%m-%d").date() + timedelta(days=6)).isoformat()
+    semanales = float(cfg.get("umbral_semanal", 45) or 45)
+
+    dias_por_trab = {}
+    for j in datos.jornadas(lunes, domingo):
+        dias_por_trab.setdefault(j["trabajador_id"], []).append(j)
+
+    filas = []
+    for t in datos.trabajadores(solo_activos=False):
+        dias = sorted(dias_por_trab.get(t["id"], []), key=lambda d: d["fecha"])
+        if not dias:
+            continue
+        horas = round(sum(d["horas"] for d in dias), 2)
+        extra = round(max(0.0, horas - semanales), 2)
+        ordinarias = round(horas - extra, 2)
+        v_extra = valor_hora_extra(cfg, dict(t))
+        incompletos = [d for d in dias if not d["completa"]]
+        filas.append({
+            "id": t["id"], "nombre": t["nombre"],
+            "valor_hora": float(t["valor_hora"] or 0), "valor_extra": v_extra,
+            "dias": dias, "turnos": len(dias),
+            "horas": horas, "ordinarias": ordinarias, "extra": extra,
+            "colacion": round(sum(d["colacion"] for d in dias) / 60.0, 2),
+            "pago_ordinario": round(ordinarias * float(t["valor_hora"] or 0)),
+            "pago_extra": round(extra * v_extra),
+            "incompletos": incompletos,
+        })
+        filas[-1]["total"] = filas[-1]["pago_ordinario"] + filas[-1]["pago_extra"]
+        filas[-1]["detalle"] = dias        # mismo nombre que usa el informe mensual
+
+    filas.sort(key=lambda f: f["nombre"].lower())
+    totales = {
+        "turnos": sum(f["turnos"] for f in filas),
+        "horas": round(sum(f["horas"] for f in filas), 2),
+        "colacion": round(sum(f["colacion"] for f in filas), 2),
+        "ordinarias": round(sum(f["ordinarias"] for f in filas), 2),
+        "extra": round(sum(f["extra"] for f in filas), 2),
+        "pago_ordinario": sum(f["pago_ordinario"] for f in filas),
+        "pago_extra": sum(f["pago_extra"] for f in filas),
+        "total": sum(f["total"] for f in filas),
+    }
+    return {
+        "lunes": lunes, "domingo": domingo,
+        "titulo": "Semana del %s al %s" % (texto_dia(lunes), texto_dia(domingo)),
+        "semanales": semanales, "cfg": cfg, "filas": filas, "totales": totales,
+        "regla_extra": texto_regla_extra(cfg),
+        "regla": "semanal",
+        "umbral_diario": _limpio(cfg.get("umbral_diario", "8")),
+        "umbral_semanal": _limpio(cfg.get("umbral_semanal", "45")),
+        "negocio": cfg.get("negocio", NEGOCIO_DEF),
+        "ciudad": cfg.get("ciudad", CIUDAD_DEF),
+    }
+
+
+def texto_dia(iso):
+    d = datetime.strptime(iso, "%Y-%m-%d").date()
+    return "%d de %s" % (d.day, nombre_mes(d.month))
