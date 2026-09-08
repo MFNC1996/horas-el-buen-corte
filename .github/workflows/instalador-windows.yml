@@ -52,6 +52,7 @@ jobs:
             exit 1
           }
           Write-Host "La app siguio abierta 15 segundos: arranca bien."
+          Write-Host "(un .exe de PyInstaller corre como lanzador + aplicacion)"
 
           function Fotografiar($nombre) {
             $a = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width
@@ -71,7 +72,8 @@ jobs:
             Start-Sleep -Seconds 2
             Fotografiar $n
           }
-          Stop-Process -Id $p.Id -Force
+          Get-Process -Name ControlDeHoras -ErrorAction SilentlyContinue |
+            Stop-Process -Force
 
       - name: Preparar el LEEME
         shell: pwsh
@@ -136,8 +138,16 @@ jobs:
           $bmp.Save("$PWD\capturas\5-instalada.png",
                     [System.Drawing.Imaging.ImageFormat]::Png)
           Write-Host "La app instalada siguio abierta 15 segundos."
-          Stop-Process -Id $p.Id -Force
-          Start-Sleep -Seconds 2
+          # Un ejecutable de PyInstaller en un solo archivo corre como dos
+          # procesos: el lanzador y la aplicacion. Matar solo el lanzador deja
+          # al hijo vivo reteniendo el .exe, y despues no se puede desinstalar.
+          Get-Process -Name ControlDeHoras -ErrorAction SilentlyContinue |
+            Stop-Process -Force
+          Start-Sleep -Seconds 5
+          $vivos = @(Get-Process -Name ControlDeHoras -ErrorAction SilentlyContinue)
+          if ($vivos.Count -gt 0) {
+            Write-Error "Quedaron $($vivos.Count) procesos vivos."; exit 1
+          }
 
           Write-Host "== Desinstalando =="
           $reg = "$PWD\desinstalacion.log"
