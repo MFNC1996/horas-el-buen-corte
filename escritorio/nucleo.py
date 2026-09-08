@@ -261,6 +261,58 @@ class Datos(object):
     def total_jornadas(self):
         return self.cx.execute("SELECT COUNT(*) FROM jornadas").fetchone()[0]
 
+    # -- respaldos ------------------------------------------------------
+    def carpeta_respaldos(self):
+        c = os.path.join(os.path.dirname(self.ruta), "respaldos")
+        os.makedirs(c, exist_ok=True)
+        return c
+
+    def respaldar(self, destino=None, conservar=30):
+        """
+        Copia la base de datos. Sin destino hace la copia del dia dentro de
+        respaldos/ y borra las mas viejas; con destino la guarda donde se le
+        diga (un pendrive, por ejemplo).
+
+        Usa la copia propia de SQLite y no copiar el archivo a mano, porque
+        con WAL el archivo suelto puede quedar a medias.
+        """
+        automatico = destino is None
+        if automatico:
+            destino = os.path.join(self.carpeta_respaldos(),
+                                   "horas-%s.sqlite3" % date.today().isoformat())
+            if os.path.exists(destino):
+                return None                      # ya hay copia de hoy
+        otro = sqlite3.connect(destino)
+        try:
+            with otro:
+                self.cx.backup(otro)
+        finally:
+            otro.close()
+        if automatico:
+            self._podar_respaldos(conservar)
+        return destino
+
+    def _podar_respaldos(self, conservar):
+        c = self.carpeta_respaldos()
+        copias = sorted(f for f in os.listdir(c)
+                        if f.startswith("horas-") and f.endswith(".sqlite3"))
+        for viejo in copias[:-conservar] if conservar > 0 else []:
+            try:
+                os.remove(os.path.join(c, viejo))
+            except OSError:
+                pass
+
+    def ultimo_respaldo(self):
+        """(fecha, cuantas copias hay). (None, 0) si todavia no hay ninguna."""
+        try:
+            copias = sorted(f for f in os.listdir(self.carpeta_respaldos())
+                            if f.startswith("horas-") and f.endswith(".sqlite3"))
+        except OSError:
+            return None, 0
+        if not copias:
+            return None, 0
+        return copias[-1][len("horas-"):-len(".sqlite3")], len(copias)
+
     def sembrar_si_vacia(self):
         if self.cx.execute("SELECT COUNT(*) FROM trabajadores").fetchone()[0]:
             return False

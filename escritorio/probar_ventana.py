@@ -72,6 +72,77 @@ p = informes.a_pdf(r, os.path.join(d, "i.pdf"))
 check("Excel con contenido", os.path.getsize(x) > 4000)
 check("PDF con contenido", os.path.getsize(p) > 2000)
 
+print("\n--- exportar desde el boton, con el dialogo simulado ---")
+import tkinter.filedialog as fd, tkinter.messagebox as mb
+salida = tempfile.mkdtemp()
+elegido = {"ruta": None}
+def falso_guardar(**kw):
+    elegido["ruta"] = os.path.join(salida, "informe" + kw.get("defaultextension", ""))
+    return elegido["ruta"]
+fd.asksaveasfilename = falso_guardar
+mb.askyesno = lambda *a, **k: False          # no abrir el archivo despues
+mb.showinfo = lambda *a, **k: None
+mb.showerror = lambda *a, **k: fallas.append("showerror: " + str(a))
+
+v.cb_mes_r.set(v._mes_texto("2026-09"))
+v.exportar("excel")
+check("el boton genera el Excel", elegido["ruta"] and os.path.getsize(elegido["ruta"]) > 4000)
+v.exportar("pdf")
+check("el boton genera el PDF", elegido["ruta"] and os.path.getsize(elegido["ruta"]) > 2000)
+
+print("\n--- agregar y editar trabajadores ---")
+antes = len(v.datos.trabajadores())
+v._set(v.e_tnombre, "Prueba Uno"); v._set(v.e_tvalor, "5.000"); v._set(v.e_tvalorx, "7500")
+v.agregar_trabajador()
+check("se agrego", len(v.datos.trabajadores()) == antes + 1)
+nuevo = [t for t in v.datos.trabajadores() if t["nombre"] == "Prueba Uno"][0]
+check("acepta el monto con punto de miles", nuevo["valor_hora"] == 5000.0)
+check("guarda el valor de hora extra propio", nuevo["valor_hora_extra"] == 7500.0)
+
+v.tv_t.selection_set(str(nuevo["id"])); v.cargar_trabajador_sel()
+check("carga el seleccionado en el formulario", v.e_tnombre.get() == "Prueba Uno")
+v._set(v.e_tnombre, "Prueba Editada"); v._set(v.e_tvalor, "6000")
+v.guardar_trabajador()
+check("guarda el cambio de nombre",
+      any(t["nombre"] == "Prueba Editada" for t in v.datos.trabajadores()))
+
+print("\n--- guardar configuracion ---")
+v._set(v.e_ud, "9"); v._set(v.e_us, "44")
+v.cb_regla.current(1); v.modo_extra.set("fijo"); v._set(v.e_vextra, "7000")
+v.guardar_config()
+c = v.datos.config()
+check("umbral diario guardado", float(c["umbral_diario"]) == 9.0)
+check("umbral semanal guardado", float(c["umbral_semanal"]) == 44.0)
+check("regla guardada", c["regla"] == "semanal")
+check("modo de hora extra guardado", c["modo_extra"] == "fijo")
+check("valor fijo guardado", float(c["valor_extra_global"]) == 7000.0)
+
+print("\n--- editar y borrar una jornada ---")
+jid = v.tv_j.get_children()[0]
+v.tv_j.selection_set(jid); v.editar_sel()
+check("carga la jornada en el formulario", v.editando == int(jid))
+v._set(v.e_sal, "20:00"); v.guardar_jornada()
+check("guarda el cambio sin duplicar", v.datos.total_jornadas() == 1)
+check("la salida quedo cambiada", v.datos.jornadas()[0]["salida"] == "20:00")
+
+mb.askyesno = lambda *a, **k: True
+v.tv_j.selection_set(v.tv_j.get_children()[0]); v.borrar_sel()
+check("borra la jornada", v.datos.total_jornadas() == 0)
+
+print("\n--- quitar un trabajador conserva su historial ---")
+tid = [t for t in v.datos.trabajadores() if t["nombre"] == "Prueba Editada"][0]["id"]
+v.guardar_jornada.__self__.datos.guardar_jornada(None, tid, "2026-09-15", "09:00", "18:00", 60)
+v.tv_t.selection_set(str(tid)); v.quitar_trabajador()
+check("sale de la lista", not any(t["id"] == tid for t in v.datos.trabajadores()))
+check("su jornada sigue guardada", v.datos.jornadas_de(tid) == 1)
+
+print("\n--- respaldos ---")
+check("hizo la copia del dia", v.datos.ultimo_respaldo()[0] is not None)
+check("no duplica la copia del dia", v.datos.respaldar() is None)
+manual = os.path.join(tempfile.mkdtemp(), "copia.sqlite3")
+v.datos.respaldar(manual)
+check("la copia manual queda utilizable", os.path.getsize(manual) > 0)
+
 v.destroy()
 print("\n" + ("TODO OK" if not fallas else "%d FALLAS: %s" % (len(fallas), fallas)))
 sys.exit(1 if fallas else 0)

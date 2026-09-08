@@ -42,6 +42,10 @@ class App(tk.Tk):
         tk.Tk.__init__(self)
         self.datos = N.Datos()
         primera = self.datos.sembrar_si_vacia()
+        try:
+            self.datos.respaldar()          # copia del dia, se conservan 30
+        except Exception:
+            pass                            # nunca impedir abrir la aplicacion
 
         self.title("Control de Horas  -  El Buen Corte")
         # Muchos computadores de local son de 1366x768: la ventana se ajusta
@@ -357,6 +361,8 @@ class App(tk.Tk):
                    command=self.guardar_config).pack(side="left")
         ttk.Button(pie, text="Abrir carpeta de datos",
                    command=self.abrir_carpeta_datos).pack(side="left", padx=8)
+        ttk.Button(pie, text="Guardar copia en un pendrive...",
+                   command=self.copia_manual).pack(side="left")
         self.lbl_ruta = tk.Label(p, text="", bg=PAPEL, fg=SUAVE, font=(FUENTE, 8),
                                  anchor="w", justify="left")
         self.lbl_ruta.pack(fill="x", pady=(12, 0))
@@ -607,6 +613,20 @@ class App(tk.Tk):
         except Exception:
             pass
 
+    def copia_manual(self):
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar copia de seguridad", defaultextension=".sqlite3",
+            initialfile="horas-%s.sqlite3" % date.today().isoformat(),
+            filetypes=[("Base de datos", "*.sqlite3")])
+        if not ruta:
+            return
+        try:
+            self.datos.respaldar(ruta)
+        except Exception as e:
+            return messagebox.showerror("No se pudo copiar", str(e))
+        messagebox.showinfo("Copia guardada",
+                            "Se guardo una copia en:\n%s" % ruta)
+
     def abrir_carpeta_datos(self):
         self._abrir(N.carpeta_datos())
 
@@ -731,9 +751,15 @@ class App(tk.Tk):
         self._set(self.e_negocio, c.get("negocio", N.NEGOCIO_DEF))
         self._set(self.e_ciudad, c.get("ciudad", N.CIUDAD_DEF))
         self._refrescar_modo()
-        self.lbl_ruta.config(text="Los datos se guardan en:  %s\n"
-                                  "Hay %d jornadas registradas."
-                                  % (self.datos.ruta, self.datos.total_jornadas()))
+        fecha, cuantos = self.datos.ultimo_respaldo()
+        self.lbl_ruta.config(
+            text="Los datos se guardan en:  %s\n"
+                 "Hay %d jornadas registradas.\n"
+                 "%s"
+                 % (self.datos.ruta, self.datos.total_jornadas(),
+                    ("Respaldo automatico: ultima copia del %s, %d guardadas "
+                     "(se conservan los ultimos 30 dias)." % (fecha, cuantos))
+                    if fecha else "Todavia no hay respaldos."))
 
 
 def main():

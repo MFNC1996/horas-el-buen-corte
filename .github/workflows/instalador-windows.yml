@@ -98,6 +98,56 @@ jobs:
           Write-Host ("instalador: {0:N1} MB" -f ($i.Length / 1MB))
           if ($i.Length -lt 3MB) { Write-Error "El instalador quedo muy chico."; exit 1 }
 
+      - name: Instalar de verdad, abrir la app instalada y desinstalar
+        shell: pwsh
+        run: |
+          $destino = "C:\PruebaControlDeHoras"
+          Write-Host "== Instalando en silencio =="
+          $i = Start-Process -FilePath "salida\ControlDeHoras-Setup.exe" `
+               -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART", `
+                             "/DIR=$destino","/TASKS=" -Wait -PassThru
+          if ($i.ExitCode -ne 0) {
+            Write-Error "El instalador termino con codigo $($i.ExitCode)."; exit 1
+          }
+
+          $exe = Join-Path $destino "ControlDeHoras.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "No quedo instalado $exe"; exit 1
+          }
+          if (-not (Test-Path (Join-Path $destino "LEEME.txt"))) {
+            Write-Error "Falta el LEEME junto a la aplicacion"; exit 1
+          }
+          $desinst = Get-ChildItem $destino -Filter "unins*.exe" | Select-Object -First 1
+          if (-not $desinst) { Write-Error "No quedo desinstalador"; exit 1 }
+          Write-Host "Instalado correctamente en $destino"
+
+          Write-Host "== Abriendo la aplicacion instalada =="
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) {
+            Write-Error "La app instalada se cerro sola (codigo $($p.ExitCode))."
+            exit 1
+          }
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $a = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width
+          $h = [System.Windows.Forms.SystemInformation]::VirtualScreen.Height
+          $bmp = New-Object System.Drawing.Bitmap $a, $h
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen(0,0,0,0,$bmp.Size)
+          $bmp.Save("$PWD\capturas\5-instalada.png",
+                    [System.Drawing.Imaging.ImageFormat]::Png)
+          Write-Host "La app instalada siguio abierta 15 segundos."
+          Stop-Process -Id $p.Id -Force
+          Start-Sleep -Seconds 2
+
+          Write-Host "== Desinstalando =="
+          $d = Start-Process -FilePath $desinst.FullName `
+               -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          Start-Sleep -Seconds 5
+          if (Test-Path $exe) {
+            Write-Error "La desinstalacion dejo el ejecutable en su lugar."; exit 1
+          }
+          Write-Host "Desinstalado limpio."
+
       - name: Guardar el instalador
         uses: actions/upload-artifact@v4
         with:
