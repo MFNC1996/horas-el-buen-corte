@@ -77,6 +77,42 @@ def a_hhmm(minutos):
     return "%02d:%02d" % (minutos // 60, minutos % 60)
 
 
+def normalizar_hora(texto):
+    """
+    Entiende la hora escrita como venga y la deja en HH:MM.
+
+        830   -> 08:30      8      -> 08:00
+        1930  -> 19:30      19     -> 19:00
+        8:30  -> 08:30      8.30   -> 08:30
+
+    Devuelve None si de verdad no se entiende.
+    """
+    t = str(texto or "").strip().replace(".", ":").replace(" ", ":")
+    if not t:
+        return None
+    if ":" in t:
+        partes = [x for x in t.split(":") if x != ""]
+        if len(partes) == 1 and partes[0].isdigit():
+            h, m = int(partes[0]), 0
+        elif len(partes) == 2 and partes[0].isdigit() and partes[1].isdigit():
+            h, m = int(partes[0]), int(partes[1])
+        else:
+            return None
+    else:
+        d = "".join(c for c in t if c.isdigit())
+        if not d or len(d) > 4:
+            return None
+        if len(d) <= 2:
+            h, m = int(d), 0
+        elif len(d) == 3:
+            h, m = int(d[0]), int(d[1:])
+        else:
+            h, m = int(d[:2]), int(d[2:])
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return None
+    return "%02d:%02d" % (h, m)
+
+
 def minutos_turno(entrada, salida):
     """Minutos entre entrada y salida. Si cruza medianoche, suma 24 h."""
     e, s = a_minutos(entrada), a_minutos(salida)
@@ -402,9 +438,11 @@ class Datos(object):
             raise ValueError("Esa marca ya no existe.")
         m = dict(m)
         if hora is not None:
-            if a_minutos(hora) is None:
-                raise ValueError("'%s' no es una hora valida. Escribela como 14:30." % hora)
-            m["hora"] = hora
+            limpia = normalizar_hora(hora)
+            if limpia is None:
+                raise ValueError(
+                    "'%s' no se entiende como hora. Puedes escribir 1430 o 14:30." % hora)
+            m["hora"] = limpia
         if tipo is not None:
             if tipo not in TIPOS:
                 raise ValueError("Tipo de marca desconocido.")
@@ -422,8 +460,10 @@ class Datos(object):
         """Para cuando a alguien se le olvido marcar y hay que agregarla."""
         if tipo not in TIPOS:
             raise ValueError("Tipo de marca desconocido.")
-        if a_minutos(hora) is None:
-            raise ValueError("'%s' no es una hora valida. Escribela como 14:30." % hora)
+        hora = normalizar_hora(hora)
+        if hora is None:
+            raise ValueError(
+                "No se entiende esa hora. Puedes escribir 1430 o 14:30.")
         datetime.strptime(fecha, "%Y-%m-%d")
         if any(m["tipo"] == tipo for m in self.marcas_de(tid, fecha)):
             raise ValueError("Ese dia ya tiene una marca de %s." % ETIQUETAS[tipo])

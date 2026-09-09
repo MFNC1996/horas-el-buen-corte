@@ -84,3 +84,9 @@ UN AVISO
 Los montos que calcula son los que tu configuraste. Es una herramienta
 de control interno: confirma las cifras con tu contador antes de usarlas
 para liquidaciones de sueldo.
+
+
+---------------------------------------------------
+Control de Horas  v1.3.0
+Desarrollado por Macoem
+https://github.com/MFNC1996/horas-el-buen-corte

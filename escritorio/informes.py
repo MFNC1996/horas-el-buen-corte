@@ -27,6 +27,7 @@ def _pie(r):
         "Valor de la hora extra: %s." % r["regla_extra"],
         "Documento de control interno. Confirme los montos con su contador "
         "antes de usarlos para liquidaciones.",
+        "Generado con Control de Horas, desarrollado por Macoem.",
     ]
 
 

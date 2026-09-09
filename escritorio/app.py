@@ -31,8 +31,59 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
+VERSION = "1.3.0"
+AUTOR = "Macoem"
+
 FUENTE = "Segoe UI" if sys.platform.startswith("win") else "Helvetica"
 MONO = "Consolas" if sys.platform.startswith("win") else "Menlo"
+
+
+class Onda(tk.Canvas):
+    """El borde ondulado de la insignia del logo, como separador."""
+
+    def __init__(self, padre, height=9, color=VERDE, fondo=PAPEL):
+        tk.Canvas.__init__(self, padre, height=height, bg=fondo,
+                           highlightthickness=0, bd=0)
+        self.color = color
+        self.alto = height
+        self.bind("<Configure>", lambda e: self._dibujar())
+
+    def _dibujar(self):
+        self.delete("all")
+        ancho = self.winfo_width()
+        paso = 22
+        y = self.alto - 2
+        for x in range(-paso, ancho + paso, paso * 2):
+            self.create_arc(x, y - self.alto + 1, x + paso, y + self.alto - 1,
+                            start=0, extent=180, style="arc",
+                            outline=self.color, width=2)
+            self.create_arc(x + paso, y - self.alto + 1, x + paso * 2, y + self.alto - 1,
+                            start=180, extent=180, style="arc",
+                            outline=self.color, width=2)
+
+
+class Cinta(tk.Canvas):
+    """La cinta roja con la muesca y la estrella, como en el logo."""
+
+    def __init__(self, padre, texto, fondo=PAPEL):
+        self.texto = texto.upper()
+        ancho = 34 + len(self.texto) * 8 + 22
+        tk.Canvas.__init__(self, padre, height=28, width=ancho, bg=fondo,
+                           highlightthickness=0, bd=0)
+        self.create_polygon(0, 0, ancho, 0, ancho - 13, 14, ancho, 28, 0, 28,
+                            fill=ROJO, outline="")
+        self._estrella(17, 14, 6.5)
+        self.create_text(30, 15, text=self.texto, anchor="w", fill=BLANCO,
+                         font=(FUENTE, 9, "bold"))
+
+    def _estrella(self, cx, cy, r):
+        import math
+        pts = []
+        for i in range(10):
+            radio = r if i % 2 == 0 else r * 0.44
+            ang = math.pi / 2 * 3 + i * math.pi / 5
+            pts += [cx + radio * math.cos(ang), cy + radio * math.sin(ang)]
+        self.create_polygon(pts, fill=BLANCO, outline="")
 
 
 class App(tk.Tk):
@@ -114,8 +165,19 @@ class App(tk.Tk):
         barra = tk.Frame(self, bg=BLANCO, height=76)
         barra.pack(fill="x", side="top")
         barra.pack_propagate(False)
+
+        # Las chairas cruzadas del logo del local.
+        self.img_marca = None
+        try:
+            import imagen_marca
+            self.img_marca = tk.PhotoImage(data=imagen_marca.CABECERA)
+            tk.Label(barra, image=self.img_marca, bg=BLANCO).pack(
+                side="left", padx=(16, 0), pady=8)
+        except Exception:
+            pass                      # sin la imagen la ventana igual sirve
+
         cont = tk.Frame(barra, bg=BLANCO)
-        cont.pack(side="left", padx=18, pady=10)
+        cont.pack(side="left", padx=14, pady=10)
         tk.Label(cont, text="El Buen Corte", bg=BLANCO, fg=ROJO,
                  font=(FUENTE, 19, "bold italic")).pack(anchor="w")
         tk.Label(cont, text="LONCOCHE  ·  CONTROL DE HORAS", bg=BLANCO, fg=SUAVE,
@@ -123,7 +185,7 @@ class App(tk.Tk):
         self.lbl_reloj = tk.Label(barra, text="", bg=BLANCO, fg=TINTA,
                                   font=(MONO, 22, "bold"))
         self.lbl_reloj.pack(side="right", padx=22)
-        tk.Frame(self, bg=VERDE, height=3).pack(fill="x")
+        Onda(self, height=9).pack(fill="x")
 
     def _latido(self):
         """Reloj de la cabecera: la hora que se va a registrar al marcar."""
@@ -135,14 +197,24 @@ class App(tk.Tk):
         p = ttk.Frame(self, padding=16)
         self.tabs.add(p, text="  Marcar  ")
 
-        tk.Label(p, text="1.  Toca tu nombre", bg=PAPEL, fg=SUAVE,
-                 font=(FUENTE, 10, "bold")).pack(anchor="w")
+        Cinta(p, "Toca tu nombre").pack(anchor="w", pady=(0, 2))
         self.caja_nombres = tk.Frame(p, bg=PAPEL)
         self.caja_nombres.pack(fill="x", pady=(8, 16))
 
         self.panel = tk.Frame(p, bg=BLANCO, highlightbackground=LINEA,
                               highlightthickness=1)
         self.panel.pack(fill="both", expand=True)
+
+        # La marca del logo ocupa el panel mientras nadie ha elegido su nombre.
+        self.img_grande = None
+        try:
+            import imagen_marca
+            self.img_grande = tk.PhotoImage(data=imagen_marca.GRANDE).subsample(3, 3)
+        except Exception:
+            pass
+        self.lbl_agua = tk.Label(self.panel, bg=BLANCO)
+        if self.img_grande is not None:
+            self.lbl_agua.config(image=self.img_grande)
 
         self.lbl_quien = tk.Label(self.panel, text="", bg=BLANCO, fg=TINTA,
                                   font=(FUENTE, 20, "bold"))
@@ -201,7 +273,11 @@ class App(tk.Tk):
             self.lbl_marca.config(text="")
             self.lbl_hoy.config(text="")
             self.btn_marcar.config(state="disabled", text="MARCAR")
+            if self.img_grande is not None and not self.lbl_agua.winfo_ismapped():
+                self.lbl_agua.pack(pady=(6, 0))
             return
+        if self.lbl_agua.winfo_ismapped():
+            self.lbl_agua.pack_forget()
         t = [x for x in self._trabs if x["id"] == self.sel_trab]
         if not t:
             self.sel_trab = None
@@ -263,6 +339,7 @@ class App(tk.Tk):
         self.cb_filtro_trab.bind("<<ComboboxSelected>>", lambda e: self.recargar_jornadas())
         ttk.Button(f, text="Corregir marcas del dia", style="Principal.TButton",
                    command=self.abrir_editor).pack(side="right")
+        Cinta(p, "Los dias trabajados").pack(anchor="w", pady=(10, 0), before=f)
 
         tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
                  text="Doble clic sobre un dia para corregir sus marcas. Los dias "
@@ -383,8 +460,12 @@ class App(tk.Tk):
         self.e_tnombre = ttk.Entry(f, width=26, font=(FUENTE, 11))
         self.e_tnombre.grid(row=1, column=0, padx=(0, 16), sticky="w")
         ttk.Label(f, text="Valor hora normal ($)", style="Rotulo.TLabel").grid(row=0, column=1, sticky="w")
-        self.e_tvalor = ttk.Entry(f, width=13, font=(MONO, 10), justify="right")
-        self.e_tvalor.grid(row=1, column=1, padx=(0, 16), sticky="w")
+        caja_vh = ttk.Frame(f)
+        caja_vh.grid(row=1, column=1, padx=(0, 16), sticky="w")
+        self.e_tvalor = ttk.Entry(caja_vh, width=11, font=(MONO, 10), justify="right")
+        self.e_tvalor.pack(side="left")
+        ttk.Button(caja_vh, text="¿No lo sabes?", style="Chip.TButton",
+                   command=self.abrir_calculadora).pack(side="left", padx=(5, 0))
         ttk.Label(f, text="Valor hora extra ($)", style="Rotulo.TLabel").grid(row=0, column=2, sticky="w")
         self.e_tvalorx = ttk.Entry(f, width=13, font=(MONO, 10), justify="right")
         self.e_tvalorx.grid(row=1, column=2, padx=(0, 16), sticky="w")
@@ -395,21 +476,9 @@ class App(tk.Tk):
         ttk.Label(f, text="en blanco usa la general", style="Rotulo.TLabel").grid(
             row=1, column=4, sticky="w")
 
-        calc = ttk.LabelFrame(p, text=" SACAR EL VALOR HORA DESDE EL SUELDO ", padding=12)
-        calc.pack(fill="x", pady=(12, 0))
-        ttk.Label(calc, text="Sueldo mensual del contrato ($)",
-                  style="Rotulo.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 12))
-        self.e_sueldo = ttk.Entry(calc, width=13, font=(MONO, 10), justify="right")
-        self.e_sueldo.grid(row=1, column=0, padx=(0, 12), sticky="w")
-        ttk.Label(calc, text="Horas semanales pactadas",
-                  style="Rotulo.TLabel").grid(row=0, column=1, sticky="w", padx=(0, 12))
-        self.e_hsem = ttk.Entry(calc, width=8, font=(MONO, 10), justify="right")
-        self.e_hsem.grid(row=1, column=1, padx=(0, 12), sticky="w")
-        ttk.Button(calc, text="Calcular y poner arriba",
-                   command=self.calcular_valor_hora).grid(row=1, column=2, padx=(0, 12))
-        self.lbl_calc = tk.Label(calc, text="", bg=PAPEL, fg=SUAVE,
-                                 font=(FUENTE, 9), justify="left", anchor="w")
-        self.lbl_calc.grid(row=1, column=3, sticky="w")
+        self.lbl_calc = tk.Label(p, text="", bg=PAPEL, fg=VERDE, font=(FUENTE, 9),
+                                 justify="left", anchor="w")
+        self.lbl_calc.pack(fill="x", pady=(8, 0))
         b = ttk.Frame(f)
         b.grid(row=2, column=0, columnspan=4, sticky="w", pady=(12, 0))
         ttk.Button(b, text="Agregar nuevo", style="Principal.TButton",
@@ -500,6 +569,9 @@ class App(tk.Tk):
         self.lbl_ruta = tk.Label(p, text="", bg=PAPEL, fg=SUAVE, font=(FUENTE, 8),
                                  anchor="w", justify="left")
         self.lbl_ruta.pack(fill="x", pady=(12, 0))
+        tk.Label(p, text="Control de Horas  v%s   ·   desarrollado por Macoem"
+                         % VERSION, bg=PAPEL, fg=SUAVE,
+                 font=(FUENTE, 9, "bold"), anchor="w").pack(fill="x", pady=(10, 0))
 
     # ============================================================= utilidades
     @staticmethod
@@ -544,8 +616,27 @@ class App(tk.Tk):
         return "%s de %s" % (N.nombre_mes(int(m)).capitalize(), a)
 
     # ============================================================== acciones
+    def _valor_hora_sospechoso(self, v):
+        """
+        Un valor hora de mas de $50.000 casi seguro es el sueldo mensual mal
+        puesto. Si pasa inadvertido, cada dia se paga cientos de veces de mas.
+        """
+        if v <= 50000:
+            return False
+        return not messagebox.askyesno(
+            "Revisa ese valor",
+            "Pusiste %s como valor de UNA HORA.\n\n"
+            "Eso parece un sueldo mensual, no un valor por hora. Con ese numero, "
+            "un dia de 7 horas se pagaria %s.\n\n"
+            "Si escribiste el sueldo por equivocacion, dale que No y usa el boton "
+            "'¿No lo sabes?' que esta al lado del campo.\n\n"
+            "¿Seguro que %s es lo que vale una hora?" % (N.pesos(v), N.pesos(v * 7),
+                                                          N.pesos(v)))
+
     def agregar_trabajador(self):
         try:
+            if self._valor_hora_sospechoso(self._numero(self.e_tvalor.get())):
+                return
             self.datos.agregar_trabajador(self.e_tnombre.get(),
                                           self._numero(self.e_tvalor.get()),
                                           self._numero(self.e_tvalorx.get()),
@@ -554,25 +645,22 @@ class App(tk.Tk):
             return messagebox.showerror("No se pudo agregar", str(e))
         for c in (self.e_tnombre, self.e_tvalor, self.e_tvalorx, self.e_tcontrato):
             self._set(c, "")
+        self.lbl_calc.config(text="")
         self.recargar_todo()
 
-    def calcular_valor_hora(self):
+    def abrir_calculadora(self):
+        Calculadora(self)
+
+    def aplicar_valor_hora(self, sueldo, horas):
         """sueldo / 30 x 7 / horas semanales = valor de la hora ordinaria."""
-        try:
-            sueldo = self._numero(self.e_sueldo.get())
-            horas = self._numero(self.e_hsem.get())
-        except ValueError as e:
-            return messagebox.showerror("Dato invalido", str(e))
         v = N.valor_hora_desde_sueldo(sueldo, horas)
         if not v:
-            return messagebox.showinfo(
-                "Faltan datos",
-                "Escribe el sueldo mensual y las horas semanales del contrato.")
+            return 0
         self._set(self.e_tvalor, "%d" % v)
         self.lbl_calc.config(
-            text="%s / 30 x 7 / %s h  =  %s la hora\n"
-                 "Puesto arriba en 'Valor hora normal'. Confirmalo con tu contador."
+            text="Valor hora puesto arriba:  %s / 30 x 7 / %s h  =  %s la hora."
                  % (N.pesos(sueldo), N._limpio(horas), N.pesos(v)))
+        return v
 
     def guardar_trabajador(self):
         sel = self.tv_t.selection()
@@ -580,6 +668,8 @@ class App(tk.Tk):
             return messagebox.showinfo("Elige un trabajador",
                                        "Selecciona uno de la lista de abajo.")
         try:
+            if self._valor_hora_sospechoso(self._numero(self.e_tvalor.get())):
+                return
             self.datos.editar_trabajador(int(sel[0]), self.e_tnombre.get(),
                                          self._numero(self.e_tvalor.get()),
                                          self._numero(self.e_tvalorx.get()),
@@ -816,6 +906,94 @@ class App(tk.Tk):
                      % (fecha, cuantos)) if fecha else "Todavia no hay respaldos."))
 
 
+# ------------------------------------ sacar el valor hora desde el sueldo
+class Calculadora(tk.Toplevel):
+    """
+    Convierte el sueldo del contrato en valor por hora.
+
+        sueldo / 30 = sueldo diario
+        diario x 7  = sueldo semanal
+        semanal / horas semanales pactadas = valor hora
+    """
+
+    def __init__(self, padre):
+        tk.Toplevel.__init__(self, padre)
+        self.padre = padre
+        self.title("Sacar el valor hora desde el sueldo")
+        self.configure(bg=PAPEL)
+        self.resizable(False, False)
+        self.transient(padre)
+        self.grab_set()
+
+        tk.Label(self, text="¿Cuanto vale una hora?", bg=PAPEL, fg=TINTA,
+                 font=(FUENTE, 15, "bold")).pack(anchor="w", padx=20, pady=(18, 2))
+        tk.Label(self, bg=PAPEL, fg=SUAVE, font=(FUENTE, 10), justify="left",
+                 text="Escribe lo que dice el contrato y te lo calculo."
+                 ).pack(anchor="w", padx=20)
+
+        caja = tk.Frame(self, bg=PAPEL)
+        caja.pack(padx=20, pady=(16, 6), anchor="w")
+        tk.Label(caja, text="Sueldo mensual ($)", bg=PAPEL, fg=SUAVE,
+                 font=(FUENTE, 9, "bold")).grid(row=0, column=0, sticky="w")
+        self.e_sueldo = ttk.Entry(caja, width=14, font=(MONO, 13), justify="right")
+        self.e_sueldo.grid(row=1, column=0, padx=(0, 14))
+        tk.Label(caja, text="Horas semanales", bg=PAPEL, fg=SUAVE,
+                 font=(FUENTE, 9, "bold")).grid(row=0, column=1, sticky="w")
+        self.e_horas = ttk.Entry(caja, width=8, font=(MONO, 13), justify="right")
+        self.e_horas.grid(row=1, column=1)
+        self.e_horas.insert(0, N._limpio(padre.datos.config().get("umbral_semanal", "42")))
+
+        self.lbl = tk.Label(self, text="", bg=PAPEL, fg=SUAVE, font=(MONO, 11),
+                            justify="left", anchor="w")
+        self.lbl.pack(fill="x", padx=20, pady=(10, 4))
+
+        for e in (self.e_sueldo, self.e_horas):
+            e.bind("<KeyRelease>", lambda ev: self._recalcular())
+
+        pie = tk.Frame(self, bg=PAPEL)
+        pie.pack(fill="x", padx=20, pady=(8, 18))
+        self.btn = ttk.Button(pie, text="Usar este valor", style="Principal.TButton",
+                              command=self.usar, state="disabled")
+        self.btn.pack(side="left")
+        ttk.Button(pie, text="Cancelar", command=self.destroy).pack(side="left", padx=6)
+
+        self._recalcular()
+        self.e_sueldo.focus_set()
+        self.update_idletasks()
+        self.geometry("+%d+%d" % (
+            max(0, padre.winfo_rootx() + (padre.winfo_width() - self.winfo_width()) // 2),
+            max(0, padre.winfo_rooty() + 120)))
+
+    def _valores(self):
+        try:
+            return (self.padre._numero(self.e_sueldo.get()),
+                    self.padre._numero(self.e_horas.get()))
+        except ValueError:
+            return 0, 0
+
+    def _recalcular(self):
+        sueldo, horas = self._valores()
+        v = N.valor_hora_desde_sueldo(sueldo, horas)
+        if not v:
+            self.lbl.config(text="", fg=SUAVE)
+            self.btn.config(state="disabled")
+            return
+        self.lbl.config(
+            text="%s / 30      = %s al dia\n"
+                 "%s x 7       = %s a la semana\n"
+                 "%s / %s h    = %s la hora"
+                 % (N.pesos(sueldo), N.pesos(sueldo / 30.0),
+                    N.pesos(sueldo / 30.0), N.pesos(sueldo / 30.0 * 7),
+                    N.pesos(sueldo / 30.0 * 7), N._limpio(horas), N.pesos(v)),
+            fg=VERDE)
+        self.btn.config(state="normal")
+
+    def usar(self):
+        sueldo, horas = self._valores()
+        if self.padre.aplicar_valor_hora(sueldo, horas):
+            self.destroy()
+
+
 # ------------------------------------------------- corregir marcas de un dia
 class EditorMarcas(tk.Toplevel):
     """Ventanita para que el administrador arregle las marcas de un dia."""
@@ -845,8 +1023,8 @@ class EditorMarcas(tk.Toplevel):
                                   font=(FUENTE, 12, "bold"))
         self.lbl_total.pack(pady=(0, 6))
         tk.Label(self, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), justify="left",
-                 text="Escribe la hora como 14:30 y presiona Guardar. Deja el campo\n"
-                      "vacio y guarda para borrar esa marca."
+                 text="Puedes escribir la hora corta: 830 queda como 08:30, y 1930\n"
+                      "como 19:30. Deja el campo vacio y guarda para borrar esa marca."
                  ).pack(padx=18, pady=(0, 10))
 
         pie = tk.Frame(self, bg=PAPEL)
@@ -878,6 +1056,9 @@ class EditorMarcas(tk.Toplevel):
             e.grid(row=i, column=1, padx=8)
             if tipo in por_tipo:
                 e.insert(0, por_tipo[tipo]["hora"])
+            # Escribes 830 y al cambiarte de campo queda 08:30.
+            e.bind("<FocusOut>", self._acomodar)
+            e.bind("<Return>", self._acomodar)
             self.campos[tipo] = e
             origen = por_tipo.get(tipo, {}).get("origen", "")
             tk.Label(self.caja, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9),
@@ -888,12 +1069,23 @@ class EditorMarcas(tk.Toplevel):
         self.lbl_total.config(text="Horas del dia: %s"
                                    % N.horas_txt(N.horas_de_marcas(marcas)))
 
+    @staticmethod
+    def _acomodar(evento):
+        campo = evento.widget
+        texto = campo.get().strip()
+        if not texto:
+            return
+        limpia = N.normalizar_hora(texto)
+        if limpia and limpia != texto:
+            campo.delete(0, "end")
+            campo.insert(0, limpia)
+
     def guardar(self):
         marcas = self.datos.marcas_de(self.tid, self.fecha)
         por_tipo = dict((m["tipo"], m) for m in marcas)
         try:
             for tipo, campo in self.campos.items():
-                texto = campo.get().strip()
+                texto = N.normalizar_hora(campo.get()) or campo.get().strip()
                 if not texto:
                     if tipo in por_tipo:
                         self.datos.borrar_marca(por_tipo[tipo]["id"])

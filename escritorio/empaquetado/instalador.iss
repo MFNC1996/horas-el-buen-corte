@@ -2,8 +2,8 @@
 ; Instala la aplicacion, crea accesos directos y deja un desinstalador.
 
 #define Nombre    "Control de Horas"
-#define Version   "1.2.0"
-#define Empresa   "El Buen Corte"
+#define Version   "1.3.0"
+#define Empresa   "Macoem"
 #define Ejecutable "ControlDeHoras.exe"
 
 [Setup]
@@ -12,6 +12,7 @@ AppName={#Nombre}
 AppVersion={#Version}
 AppVerName={#Nombre} {#Version}
 AppPublisher={#Empresa}
+AppPublisherURL=https://github.com/MFNC1996/horas-el-buen-corte
 DefaultDirName={autopf}\ControlDeHoras
 DefaultGroupName={#Nombre}
 DisableProgramGroupPage=yes

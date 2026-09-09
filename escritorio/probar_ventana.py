@@ -36,7 +36,7 @@ check("Marcar es la primera", pestanas[0] == "Marcar")
 print("\n--- controles ---")
 for nombre in ("caja_nombres", "lbl_quien", "lbl_marca", "btn_marcar", "lbl_hoy",
                "tv_j", "tv_r", "tv_t", "e_us", "e_contrato", "cb_cierre",
-               "e_recargo", "e_vextra", "e_sueldo", "lbl_total_j",
+               "e_recargo", "e_vextra", "lbl_total_j", "lbl_calc",
                "e_negocio", "lbl_reloj"):
     check("existe %s" % nombre, hasattr(v, nombre))
 check("hay 3 trabajadores de ejemplo", len(v.datos.trabajadores()) == 3)
@@ -112,10 +112,17 @@ check("guarda el valor de la hora extra", float(c["valor_extra_global"]) == 6000
 check("la regla es diaria sobre el contrato", c["regla"] == "diaria")
 
 print("\n--- la calculadora de valor hora ---")
-v._set(v.e_sueldo, "553.553"); v._set(v.e_hsem, "42")
-v.calcular_valor_hora()
-check("553.553 con 42 h da 3.075", v.e_tvalor.get() == "3075")
+check("553.553 con 42 h da 3.075", v.aplicar_valor_hora(553553, 42) == 3075)
+check("lo deja en el campo", v.e_tvalor.get() == "3075")
 check("muestra la formula", "/ 30 x 7 /" in v.lbl_calc.cget("text"))
+
+print("\n--- avisa si el valor hora parece un sueldo ---")
+respuestas = []
+mb.askyesno = lambda *a, **k: (respuestas.append(a), False)[1]   # el usuario dice No
+check("un valor normal no molesta", v._valor_hora_sospechoso(3075) is False)
+check("553.553 la hora se frena", v._valor_hora_sospechoso(553553) is True)
+check("el aviso explica el error", "sueldo mensual" in str(respuestas[-1]))
+mb.askyesno = lambda *a, **k: False
 
 print("\n--- resumen semanal y mensual ---")
 v.cambiar_periodo("semana")

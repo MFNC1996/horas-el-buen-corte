@@ -80,6 +80,25 @@ def png(n, filas):
             + trozo(b"IEND", b""))
 
 
+def escribir_modulo(png_grande, png_chico):
+    """
+    Deja la marca como texto base64 dentro de un modulo, para que la ventana
+    la pueda mostrar sin depender de un archivo suelto al lado del .exe.
+    """
+    import base64
+    destino = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "..", "imagen_marca.py")
+    with open(os.path.normpath(destino), "w") as f:
+        f.write("# -*- coding: utf-8 -*-\n")
+        f.write('"""Las chairas cruzadas del logo. Generado por '
+                'empaquetado/hacer_icono.py; no editar a mano."""\n\n')
+        f.write("CABECERA = \"\"\"%s\"\"\"\n\n"
+                % base64.b64encode(png_chico).decode())
+        f.write("GRANDE = \"\"\"%s\"\"\"\n"
+                % base64.b64encode(png_grande).decode())
+    print("imagen_marca.py generado")
+
+
 def main():
     imagenes = []
     for n in TAMANOS:
@@ -102,6 +121,9 @@ def main():
     # PNG grande aparte, para la documentacion
     with open(os.path.join(os.path.dirname(destino), "icono.png"), "wb") as f:
         f.write(imagenes[0][1])
+    # y la marca para la cabecera de la ventana
+    chico = png(56, rasterizar(56))
+    escribir_modulo(imagenes[0][1], chico)
 
 
 if __name__ == "__main__":
