@@ -38,56 +38,6 @@ FUENTE = "Segoe UI" if sys.platform.startswith("win") else "Helvetica"
 MONO = "Consolas" if sys.platform.startswith("win") else "Menlo"
 
 
-class Onda(tk.Canvas):
-    """El borde ondulado de la insignia del logo, como separador."""
-
-    def __init__(self, padre, height=9, color=VERDE, fondo=PAPEL):
-        tk.Canvas.__init__(self, padre, height=height, bg=fondo,
-                           highlightthickness=0, bd=0)
-        self.color = color
-        self.alto = height
-        self.bind("<Configure>", lambda e: self._dibujar())
-
-    def _dibujar(self):
-        import math
-        self.delete("all")
-        ancho = max(1, self.winfo_width())
-        largo = 26.0                       # cuanto mide cada onda
-        amplitud = (self.alto - 4) / 2.0
-        medio = self.alto / 2.0
-        puntos = []
-        x = 0.0
-        while x <= ancho:
-            puntos += [x, medio + amplitud * math.sin(2 * math.pi * x / largo)]
-            x += 2.0
-        if len(puntos) >= 4:
-            self.create_line(puntos, fill=self.color, width=2, smooth=True)
-
-
-class Cinta(tk.Canvas):
-    """La cinta roja con la muesca y la estrella, como en el logo."""
-
-    def __init__(self, padre, texto, fondo=PAPEL):
-        self.texto = texto.upper()
-        ancho = 34 + len(self.texto) * 8 + 22
-        tk.Canvas.__init__(self, padre, height=28, width=ancho, bg=fondo,
-                           highlightthickness=0, bd=0)
-        self.create_polygon(0, 0, ancho, 0, ancho - 13, 14, ancho, 28, 0, 28,
-                            fill=ROJO, outline="")
-        self._estrella(17, 14, 6.5)
-        self.create_text(30, 15, text=self.texto, anchor="w", fill=BLANCO,
-                         font=(FUENTE, 9, "bold"))
-
-    def _estrella(self, cx, cy, r):
-        import math
-        pts = []
-        for i in range(10):
-            radio = r if i % 2 == 0 else r * 0.44
-            ang = math.pi / 2 * 3 + i * math.pi / 5
-            pts += [cx + radio * math.cos(ang), cy + radio * math.sin(ang)]
-        self.create_polygon(pts, fill=BLANCO, outline="")
-
-
 class App(tk.Tk):
     def __init__(self):
         tk.Tk.__init__(self)
@@ -187,7 +137,7 @@ class App(tk.Tk):
         self.lbl_reloj = tk.Label(barra, text="", bg=BLANCO, fg=TINTA,
                                   font=(MONO, 22, "bold"))
         self.lbl_reloj.pack(side="right", padx=22)
-        Onda(self, height=9).pack(fill="x")
+        tk.Frame(self, bg=VERDE, height=3).pack(fill="x")
 
     def _latido(self):
         """Reloj de la cabecera: la hora que se va a registrar al marcar."""
@@ -199,24 +149,14 @@ class App(tk.Tk):
         p = ttk.Frame(self, padding=16)
         self.tabs.add(p, text="  Marcar  ")
 
-        Cinta(p, "Toca tu nombre").pack(anchor="w", pady=(0, 2))
+        tk.Label(p, text="1.  Toca tu nombre", bg=PAPEL, fg=SUAVE,
+                 font=(FUENTE, 10, "bold")).pack(anchor="w")
         self.caja_nombres = tk.Frame(p, bg=PAPEL)
         self.caja_nombres.pack(fill="x", pady=(8, 16))
 
         self.panel = tk.Frame(p, bg=BLANCO, highlightbackground=LINEA,
                               highlightthickness=1)
         self.panel.pack(fill="both", expand=True)
-
-        # La marca del logo ocupa el panel mientras nadie ha elegido su nombre.
-        self.img_grande = None
-        try:
-            import imagen_marca
-            self.img_grande = tk.PhotoImage(data=imagen_marca.GRANDE).subsample(4, 4)
-        except Exception:
-            pass
-        self.lbl_agua = tk.Label(self.panel, bg=BLANCO)
-        if self.img_grande is not None:
-            self.lbl_agua.config(image=self.img_grande)
 
         self.lbl_quien = tk.Label(self.panel, text="", bg=BLANCO, fg=TINTA,
                                   font=(FUENTE, 20, "bold"))
@@ -275,11 +215,7 @@ class App(tk.Tk):
             self.lbl_marca.config(text="")
             self.lbl_hoy.config(text="")
             self.btn_marcar.config(state="disabled", text="MARCAR")
-            if self.img_grande is not None and not self.lbl_agua.winfo_ismapped():
-                self.lbl_agua.pack(pady=(18, 0), before=self.lbl_quien)
             return
-        if self.lbl_agua.winfo_ismapped():
-            self.lbl_agua.pack_forget()
         t = [x for x in self._trabs if x["id"] == self.sel_trab]
         if not t:
             self.sel_trab = None
@@ -341,7 +277,6 @@ class App(tk.Tk):
         self.cb_filtro_trab.bind("<<ComboboxSelected>>", lambda e: self.recargar_jornadas())
         ttk.Button(f, text="Corregir marcas del dia", style="Principal.TButton",
                    command=self.abrir_editor).pack(side="right")
-        Cinta(p, "Los dias trabajados").pack(anchor="w", pady=(10, 0), before=f)
 
         tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
                  text="Doble clic sobre un dia para corregir sus marcas. Los dias "
