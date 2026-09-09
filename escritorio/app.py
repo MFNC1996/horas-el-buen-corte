@@ -49,17 +49,19 @@ class Onda(tk.Canvas):
         self.bind("<Configure>", lambda e: self._dibujar())
 
     def _dibujar(self):
+        import math
         self.delete("all")
-        ancho = self.winfo_width()
-        paso = 22
-        y = self.alto - 2
-        for x in range(-paso, ancho + paso, paso * 2):
-            self.create_arc(x, y - self.alto + 1, x + paso, y + self.alto - 1,
-                            start=0, extent=180, style="arc",
-                            outline=self.color, width=2)
-            self.create_arc(x + paso, y - self.alto + 1, x + paso * 2, y + self.alto - 1,
-                            start=180, extent=180, style="arc",
-                            outline=self.color, width=2)
+        ancho = max(1, self.winfo_width())
+        largo = 26.0                       # cuanto mide cada onda
+        amplitud = (self.alto - 4) / 2.0
+        medio = self.alto / 2.0
+        puntos = []
+        x = 0.0
+        while x <= ancho:
+            puntos += [x, medio + amplitud * math.sin(2 * math.pi * x / largo)]
+            x += 2.0
+        if len(puntos) >= 4:
+            self.create_line(puntos, fill=self.color, width=2, smooth=True)
 
 
 class Cinta(tk.Canvas):
@@ -209,7 +211,7 @@ class App(tk.Tk):
         self.img_grande = None
         try:
             import imagen_marca
-            self.img_grande = tk.PhotoImage(data=imagen_marca.GRANDE).subsample(3, 3)
+            self.img_grande = tk.PhotoImage(data=imagen_marca.GRANDE).subsample(4, 4)
         except Exception:
             pass
         self.lbl_agua = tk.Label(self.panel, bg=BLANCO)
@@ -274,7 +276,7 @@ class App(tk.Tk):
             self.lbl_hoy.config(text="")
             self.btn_marcar.config(state="disabled", text="MARCAR")
             if self.img_grande is not None and not self.lbl_agua.winfo_ismapped():
-                self.lbl_agua.pack(pady=(6, 0))
+                self.lbl_agua.pack(pady=(18, 0), before=self.lbl_quien)
             return
         if self.lbl_agua.winfo_ismapped():
             self.lbl_agua.pack_forget()

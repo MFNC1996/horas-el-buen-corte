@@ -10,7 +10,7 @@ import math, os, struct, zlib
 PAPEL = (255, 255, 255)
 VERDE = (22, 121, 59)
 ROJO = (180, 20, 31)
-ACERO = (196, 190, 184)
+ACERO = (108, 103, 98)
 BORDE = (27, 21, 20)
 TAMANOS = [256, 128, 64, 48, 32, 16]
 SUPER = 4  # muestreo para que los bordes no queden dentados
@@ -122,7 +122,7 @@ def main():
     with open(os.path.join(os.path.dirname(destino), "icono.png"), "wb") as f:
         f.write(imagenes[0][1])
     # y la marca para la cabecera de la ventana
-    chico = png(56, rasterizar(56))
+    chico = png(64, rasterizar(64))
     escribir_modulo(imagenes[0][1], chico)
 
 
