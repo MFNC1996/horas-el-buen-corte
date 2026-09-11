@@ -393,7 +393,6 @@ class App(tk.Tk):
             self.tv_r.column(c, width=a, minwidth=60, stretch=(c == "trab"),
                              anchor="w" if c == "trab" else "e")
         self.tv_r.tag_configure("total", font=(FUENTE, 10, "bold"), background="#E6E1DC")
-        self.tv_r.tag_configure("debe", foreground=ROJO)
         self.tv_r.pack(fill="x")
         self.tv_r.bind("<<TreeviewSelect>>", lambda e: self.recargar_detalle())
 
@@ -814,7 +813,7 @@ class App(tk.Tk):
         por_pagar = pagado = 0
         for j in dias:
             if not j["completa"]:
-                tags, marca = ("falta",), "  falta marca"
+                tags, marca = ("falta",), "  -"
                 a_pagar = "falta marcar"
             elif j["pagado"]:
                 tags, marca = ("pagado",), "  ☑"
@@ -847,8 +846,7 @@ class App(tk.Tk):
         self._resumen = r
 
         for f in r["filas"]:
-            self.tv_r.insert("", "end", iid=str(f["id"]),
-                             tags=("debe",) if f["por_pagar"] else (), values=(
+            self.tv_r.insert("", "end", iid=str(f["id"]), values=(
                 f["nombre"], f["turnos"], f["dias_pagados"], N.pesos(f["pagado"]),
                 f["dias_pendientes"], N.pesos(f["por_pagar"])))
         t = r["totales"]
@@ -865,8 +863,10 @@ class App(tk.Tk):
         else:
             self.lbl_aviso_r.pack_forget()
 
-        if elegido and self.tv_r.exists(elegido[0]):
+        if elegido and self.tv_r.exists(elegido[0]) and elegido[0] != "total":
             self.tv_r.selection_set(elegido[0])
+        elif r["filas"]:
+            self.tv_r.selection_set(str(r["filas"][0]["id"]))
         self.recargar_detalle()
 
     def recargar_detalle(self):
