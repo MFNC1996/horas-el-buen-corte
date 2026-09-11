@@ -32,7 +32,7 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.4.2"
+VERSION = "1.4.3"
 AUTOR = "Macoem"
 # El titulo tambien sirve para encontrar la ventana si ya esta abierta.
 TITULO = "Control de Horas  -  El Buen Corte   |   by %s" % AUTOR
@@ -285,10 +285,11 @@ class App(tk.Tk):
         self.solo_pendientes = tk.BooleanVar(value=False)
         ttk.Checkbutton(f, text="Solo lo que falta pagar", variable=self.solo_pendientes,
                         command=self.recargar_jornadas).pack(side="left")
+        ttk.Button(f, text="Eliminar dia", command=self.eliminar_dia).pack(side="right")
 
         tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
-                 text="Para marcar un dia como pagado, haz clic en  ☐ Pagar.   "
-                      "Para corregir las horas, doble clic en la fila."
+                 text="Pagar:  clic en  ☐ Pagar.     Corregir las horas:  doble clic "
+                      "en la fila.     Borrar un dia:  eligelo y presiona  Eliminar dia."
                  ).pack(fill="x", pady=(8, 4))
 
         cols = ("pagado", "fecha", "trab", "horas", "norm", "extra", "total")
@@ -311,6 +312,7 @@ class App(tk.Tk):
         self.tv_j.pack(side="left", fill="both", expand=True)
         self.tv_j.bind("<Button-1>", self._clic_en_dia)
         self.tv_j.bind("<Double-1>", self._doble_clic_en_dia)
+        self.tv_j.bind("<Delete>", lambda e: self.eliminar_dia())
 
     def _doble_clic_en_dia(self, evento):
         # El doble clic sobre el cuadrado de pagado no abre el corrector.
@@ -348,6 +350,40 @@ class App(tk.Tk):
                 self.datos.marcar_pagado(tid, fecha)
             except ValueError as e:
                 return messagebox.showwarning("No se puede marcar como pagado", str(e))
+        self.recargar_todo()
+
+    def eliminar_dia(self):
+        """Borra el dia elegido, por ejemplo uno que se registro por error."""
+        sel = self.tv_j.selection()
+        if not sel:
+            return messagebox.showinfo("Elige un dia",
+                                       "Primero haz clic en la fila del dia que quieres "
+                                       "eliminar.")
+        fecha, tid = sel[0].split("|")
+        tid = int(tid)
+        dia = N.dias_con_valor(self.datos, fecha, fecha, tid)
+        if not dia:
+            return
+        dia = dia[0]
+        if dia["pagado"]:
+            return messagebox.showwarning(
+                "Ese dia ya esta pagado",
+                "El %s de %s figura pagado (%s).\n\n"
+                "Para eliminarlo, primero quitale el check de pagado."
+                % (N.texto_dia(fecha), dia["nombre"], N.pesos(dia["monto_pagado"])))
+        detalle = ("%s horas, %s" % (N.hhmm_txt(dia["horas"]), N.pesos(dia["total"]))
+                   if dia["completa"] else "dia incompleto")
+        if not messagebox.askyesno(
+                "Eliminar dia",
+                "¿Eliminar el %s de %s?\n\n%s\n\n"
+                "Se borran sus marcas de ese dia. No se puede deshacer."
+                % (N.texto_dia(fecha), dia["nombre"], detalle),
+                icon="warning", default="no"):
+            return
+        try:
+            self.datos.borrar_dia(tid, fecha)
+        except ValueError as e:
+            return messagebox.showwarning("No se pudo eliminar", str(e))
         self.recargar_todo()
 
     def abrir_editor(self):
@@ -1164,8 +1200,10 @@ class EditorMarcas(tk.Toplevel):
                                    "Se borran las marcas de ese dia. Seguro?",
                                    parent=self):
             return
-        for m in self.datos.marcas_de(self.tid, self.fecha):
-            self.datos.borrar_marca(m["id"])
+        try:
+            self.datos.borrar_dia(self.tid, self.fecha)
+        except ValueError as e:
+            return messagebox.showwarning("No se pudo eliminar", str(e), parent=self)
         self.padre.recargar_todo()
         self.destroy()
 

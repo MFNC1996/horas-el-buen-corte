@@ -204,8 +204,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4.2
-          name: Control de Horas 1.4.2
+          tag_name: v1.4.3
+          name: Control de Horas 1.4.3
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -241,6 +241,9 @@ jobs:
             - "by Macoem" a la vista, en la cabecera y en la barra de titulo.
             - Una sola ventana a la vez: si el programa ya esta abierto, un segundo
               doble clic trae al frente el que ya estaba en vez de abrir otro.
+            - Eliminar un dia registrado por error, desde Dias trabajados: se elige
+              la fila y se presiona "Eliminar dia" (o la tecla Supr). Pregunta
+              antes, y no deja borrar un dia ya pagado.
 
             - Las horas se ven como reloj: 10:42, no "10,70" (que se leia como
               diez horas con setenta).

@@ -53,6 +53,10 @@ COMO SE USA
    Los dias en ambar son dias a los que les falta una marca: no se pueden
    pagar hasta completarlos. Doble clic en la fila para corregirlos.
 
+   Si se registro un dia por error (alguien que no vino), eligelo y
+   presiona "Eliminar dia", o la tecla Supr. Pregunta antes de borrar.
+   Un dia ya pagado no se puede eliminar: primero se le quita el check.
+
 5. PAGOS POR PERSONA
    Por cada trabajador: dias trabajados, cuantos se le pagaron, cuanto se
    le ha pagado y CUANTO SE LE DEBE.
@@ -93,6 +97,6 @@ para liquidaciones de sueldo.
 
 
 ---------------------------------------------------
-Control de Horas  v1.4.2
+Control de Horas  v1.4.3
 Desarrollado por Macoem
 https://github.com/MFNC1996/horas-el-buen-corte

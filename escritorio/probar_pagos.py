@@ -108,5 +108,18 @@ n, total = N.pendiente_fuera(d, "2026-09-01", "2026-09-30")
 check("un dia de agosto sin pagar", n, 1)
 check("por $21.525", total, 21525)
 
+print("\n--- eliminar un dia registrado por error ---")
+ana = d.agregar_trabajador("Ana Soto", 3075)
+dia(ana, "2026-09-08", "08:30", "12:00", "13:00", "16:30")
+dia(ana, "2026-09-09", "08:30", "12:00", "13:00", "16:30")
+check("borra sus 4 marcas", d.borrar_dia(ana, "2026-09-08"), 4)
+check("el dia ya no esta", N.dias_con_valor(d, "2026-09-08", "2026-09-08", ana), [])
+check("el otro dia sigue", len(N.dias_con_valor(d, "2026-09-09", "2026-09-09", ana)), 1)
+check("no toca a los demas trabajadores",
+      len(N.dias_con_valor(d, "2026-09-07", "2026-09-07", juan)), 1)
+d.marcar_pagado(ana, "2026-09-09")
+rechaza("un dia pagado no se elimina", lambda: d.borrar_dia(ana, "2026-09-09"))
+check("y sigue ahi", len(N.dias_con_valor(d, "2026-09-09", "2026-09-09", ana)), 1)
+
 print("\n" + ("TODO OK" if not fallas else "%d FALLAS: %s" % (len(fallas), fallas)))
 sys.exit(1 if fallas else 0)

@@ -205,6 +205,32 @@ if incompleto:
     v.cambiar_pagado(incompleto[0])
 check("un dia incompleto no se deja pagar", bool(avisos) and "faltan marcas" in str(avisos[-1]))
 
+print("\n--- eliminar un dia desde Dias trabajados ---")
+dos_id = v._trabs[1]["id"]
+for tipo, h in (("entrada", "08:30"), ("colacion_inicio", "12:00"),
+                ("colacion_fin", "13:00"), ("salida", "16:30")):
+    v.datos.agregar_marca(dos_id, "2026-09-08", tipo, h)
+v.recargar_todo()
+fila_b = "2026-09-08|%d" % dos_id
+check("el dia esta en la lista", v.tv_j.exists(fila_b))
+mb.askyesno = lambda *a, **k: False
+v.tv_j.selection_set(fila_b); v.eliminar_dia()
+check("si dice que no, no se borra", v.tv_j.exists(fila_b))
+preguntas = []
+mb.askyesno = lambda *a, **k: (preguntas.append(a), True)[1]
+v.tv_j.selection_set(fila_b); v.eliminar_dia()
+check("pregunta mostrando de quien y cuanto",
+      bool(preguntas) and "7:00" in str(preguntas[-1]) and "$" in str(preguntas[-1]))
+check("si dice que si, desaparece", not v.tv_j.exists(fila_b))
+mb.askyesno = lambda *a, **k: False
+v.datos.marcar_pagado(uno, "2026-09-07"); v.recargar_todo()
+avisos = []
+mb.showwarning = lambda *a, **k: avisos.append(a)
+v.tv_j.selection_set("2026-09-07|%d" % uno); v.eliminar_dia()
+check("un dia pagado no se deja eliminar",
+      v.tv_j.exists("2026-09-07|%d" % uno) and "check" in str(avisos[-1]))
+v.datos.desmarcar_pagado(uno, "2026-09-07"); v.recargar_todo()
+
 print("\n--- pagos por persona ---")
 v.cb_mes_r.set("Todo"); v.recargar_resumen()
 check("una fila por persona, sin fila de total",

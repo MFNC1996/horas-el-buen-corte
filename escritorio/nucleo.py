@@ -498,6 +498,20 @@ class Datos(object):
         self.cx.execute("DELETE FROM marcas WHERE id=?", (mid,))
         self.cx.commit()
 
+    def borrar_dia(self, tid, fecha):
+        """
+        Borra el dia completo de un trabajador (sus cuatro marcas), por
+        ejemplo si se registro por error un dia que no vino.
+
+        Un dia pagado no se borra: primero hay que quitarle el check, para
+        que no desaparezca por accidente un pago ya registrado.
+        """
+        self._no_pagado(tid, fecha)
+        cur = self.cx.execute("DELETE FROM marcas WHERE trabajador_id=? AND fecha=?",
+                              (tid, fecha))
+        self.cx.commit()
+        return cur.rowcount
+
     # -- pagos ---------------------------------------------------------
     def pago_de(self, tid, fecha):
         f = self.cx.execute("SELECT * FROM pagos WHERE trabajador_id=? AND fecha=?",
