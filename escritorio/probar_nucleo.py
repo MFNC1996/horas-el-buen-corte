@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 """Pruebas del nucleo. Ejecutar:  python probar_nucleo.py"""
-import os, sys, tempfile
+import os, sys
+# La consola de Windows usa cp1252 y no sabe escribir simbolos como el del
+# check; asi las pruebas no se caen por algo que no tiene que ver con la app.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nucleo as N
 

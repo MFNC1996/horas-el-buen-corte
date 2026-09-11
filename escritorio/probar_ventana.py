@@ -4,7 +4,13 @@ Arma la ventana entera sin mostrarla y prueba el flujo de marcar.
 
 Sirve para que la compilacion falle en GitHub y no en el computador del local.
 """
-import os, sys, tempfile
+import os, sys
+# La consola de Windows usa cp1252 y no sabe escribir simbolos como el del
+# check; asi las pruebas no se caen por algo que no tiene que ver con la app.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ["LOCALAPPDATA"] = tempfile.mkdtemp()
 os.environ["XDG_DATA_HOME"] = os.environ["LOCALAPPDATA"]
@@ -163,7 +169,7 @@ check("10,7 h se ven como 10:42, no con decimales", vals[3] == "10:42")
 check("7:00 normales", vals[4] == "7:00")
 check("3:42 de extra", vals[5] == "3:42")
 check("dice cuanto pagar", vals[6].startswith("$"))
-check("parte con '☐ Pagar'", "Pagar" in vals[0])
+check("parte diciendo Pagar", "Pagar" in vals[0])
 check("la fila no trae columnas de mas", len(vals) == 7)
 
 v.cambiar_pagado(fila)
