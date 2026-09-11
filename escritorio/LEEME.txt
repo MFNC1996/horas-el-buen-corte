@@ -18,8 +18,6 @@ COMO SE USA
 2. CONFIGURACION
    - Horas de contrato al dia (viene 7). Todo lo que se pase de ahi
      EN EL DIA se paga como hora extra.
-   - El dia en que se paga (viene sabado). La semana se acumula sola
-     y cierra ese dia, asi el total que muestra es lo que hay que pagar.
    - Cuanto vale la hora extra. Dos opciones:
        * Recargo sobre la hora normal (50 % es lo que fija la ley en Chile).
        * Un monto fijo en pesos que tu escribes.
@@ -41,30 +39,32 @@ COMO SE USA
    mezclan nunca. Ademas, apenas alguien marca se suelta la seleccion,
    para que el siguiente no marque por error a nombre del anterior.
 
-4. JORNADAS
-   El detalle de cada dia con sus cuatro marcas y las horas trabajadas.
-   Los dias a los que les falta alguna marca salen en ambar.
-   Doble clic sobre un dia para corregir las horas a mano, si alguien
-   se olvido de marcar o marco a destiempo.
+4. DIAS TRABAJADOS
+   Un dia por fila, con lo justo: a quien, cuantas horas trabajo, cuantas
+   son normales, cuantas extra, y cuanto hay que pagarle.
 
-5. RESUMEN Y PAGO
-   Cada dia muestra su valor: horas normales por el valor hora, mas las
-   horas extra por el valor de la hora extra.
+   Las horas se leen como en un reloj: 10:42 son diez horas con cuarenta
+   y dos minutos.
 
-   Ejemplo del contrato: entra 08:30, colacion de 13:30 a 14:30, sale
-   19:30. Son 10 horas trabajadas = 7 normales + 3 extra.
-   Con la hora a $3.075 y la extra a $3.900:
-       7 x 3.075 = $21.525    3 x 3.900 = $11.700    dia = $33.225
+   El cuadrado de la izquierda es el CHECK DE PAGADO. Haz clic y ese dia
+   queda pagado, con su monto anotado. Un dia pagado ya no se puede
+   corregir: si hay que arreglarlo, primero se le quita el check.
 
-   La semana suma esos valores y cierra el dia de pago, asi que el
-   numero de abajo es lo que hay que pagar. Sin calculadora.
+   Los dias en ambar son dias a los que les falta una marca: no se pueden
+   pagar hasta completarlos. Doble clic en la fila para corregirlos.
 
-   Los botones "Exportar a Excel" y "Exportar a PDF" generan el informe
+5. PAGOS POR PERSONA
+   Por cada trabajador: dias trabajados, cuantos se le pagaron, cuanto se
+   le ha pagado y CUANTO SE LE DEBE.
+
+   Haz clic en una persona y abajo aparecen todos sus dias, pagados y por
+   pagar. Sirve para el que cobra a fin de mes: el boton "Pagar lo
+   pendiente" marca todos sus dias como pagados de una vez.
+
+   Si alguien tiene dias sin pagar de otro mes, aparece un aviso arriba.
+
+   Los botones "Exportar a Excel" y "Exportar a PDF" sacan esto mismo
    listo para imprimir.
-
-   Si no sabes el valor hora, en la pestana Trabajadores hay una
-   calculadora: escribes el sueldo mensual del contrato y las horas
-   semanales pactadas, y te lo saca.
 
 
 DONDE QUEDAN LOS DATOS
@@ -87,6 +87,6 @@ para liquidaciones de sueldo.
 
 
 ---------------------------------------------------
-Control de Horas  v1.3.0
+Control de Horas  v1.4.0
 Desarrollado por Macoem
 https://github.com/MFNC1996/horas-el-buen-corte

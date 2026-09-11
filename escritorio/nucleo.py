@@ -18,7 +18,6 @@ CONFIG_DEF = {
     # Jornada del contrato. Lo que se pasa de aqui EN EL DIA es hora extra.
     "horas_contrato": "7",
     "umbral_semanal": "45",     # solo como aviso: la ley semanal
-    "dia_cierre": "5",          # dia de pago: 0=lunes ... 5=sabado, 6=domingo
     "umbral_diario": "7",       # se mantiene por compatibilidad con bases viejas
     "regla": "diaria",          # el pago sale del excedente DIARIO sobre el contrato
     "modo_extra": "recargo",    # recargo (% sobre la hora normal) | fijo (monto en pesos)
@@ -238,6 +237,14 @@ class Datos(object):
                        registrado_en TEXT    NOT NULL DEFAULT '',
                        nota          TEXT    NOT NULL DEFAULT '')""")
         c.execute("CREATE INDEX IF NOT EXISTS ix_marcas ON marcas(trabajador_id, fecha)")
+        # Un dia pagado: cuanto se pago y cuando. El monto queda fijo, para que
+        # si despues cambia el valor hora, lo ya pagado no cambie de golpe.
+        c.execute("""CREATE TABLE IF NOT EXISTS pagos (
+                       trabajador_id INTEGER NOT NULL REFERENCES trabajadores(id),
+                       fecha         TEXT    NOT NULL,
+                       monto         INTEGER NOT NULL,
+                       pagado_en     TEXT    NOT NULL,
+                       PRIMARY KEY (trabajador_id, fecha))""")
         # Migracion para bases creadas antes de que existiera el valor fijo.
         columnas = [f[1] for f in c.execute("PRAGMA table_info(trabajadores)")]
         if "valor_hora_extra" not in columnas:
@@ -432,11 +439,20 @@ class Datos(object):
                 "hora": ahora.strftime("%H:%M"), "fecha": est["fecha"]}
 
     # -- correcciones del administrador ---------------------------------
+    def _no_pagado(self, tid, fecha):
+        """Un dia ya pagado no se corrige: habria que desmarcarlo primero."""
+        p = self.pago_de(tid, fecha)
+        if p:
+            raise ValueError(
+                "Ese dia ya esta pagado (%s el %s). Para corregirlo, primero "
+                "quitale el check de pagado." % (pesos(p["monto"]), p["pagado_en"]))
+
     def editar_marca(self, mid, hora=None, tipo=None):
         m = self.cx.execute("SELECT * FROM marcas WHERE id=?", (mid,)).fetchone()
         if not m:
             raise ValueError("Esa marca ya no existe.")
         m = dict(m)
+        self._no_pagado(m["trabajador_id"], m["fecha"])
         if hora is not None:
             limpia = normalizar_hora(hora)
             if limpia is None:
@@ -465,6 +481,7 @@ class Datos(object):
             raise ValueError(
                 "No se entiende esa hora. Puedes escribir 1430 o 14:30.")
         datetime.strptime(fecha, "%Y-%m-%d")
+        self._no_pagado(tid, fecha)
         if any(m["tipo"] == tipo for m in self.marcas_de(tid, fecha)):
             raise ValueError("Ese dia ya tiene una marca de %s." % ETIQUETAS[tipo])
         self.cx.execute(
@@ -474,8 +491,63 @@ class Datos(object):
         self.cx.commit()
 
     def borrar_marca(self, mid):
+        m = self.cx.execute("SELECT trabajador_id, fecha FROM marcas WHERE id=?",
+                            (mid,)).fetchone()
+        if m:
+            self._no_pagado(m["trabajador_id"], m["fecha"])
         self.cx.execute("DELETE FROM marcas WHERE id=?", (mid,))
         self.cx.commit()
+
+    # -- pagos ---------------------------------------------------------
+    def pago_de(self, tid, fecha):
+        f = self.cx.execute("SELECT * FROM pagos WHERE trabajador_id=? AND fecha=?",
+                            (tid, fecha)).fetchone()
+        return dict(f) if f else None
+
+    def pagos(self):
+        """{(trabajador_id, fecha): pago} de todos los dias pagados."""
+        return dict(((f["trabajador_id"], f["fecha"]), dict(f))
+                    for f in self.cx.execute("SELECT * FROM pagos"))
+
+    def marcar_pagado(self, tid, fecha, hoy=None):
+        """
+        Deja el dia como pagado, con lo que vale en este momento.
+
+        Solo se pueden pagar dias completos y con valor: un dia al que le falta
+        una marca vale $0, y pagarlo asi seria un error.
+        """
+        if self.pago_de(tid, fecha):
+            return
+        dia = [d for d in dias_con_valor(self, fecha, fecha, tid)]
+        if not dia:
+            raise ValueError("Ese trabajador no tiene marcas ese dia.")
+        dia = dia[0]
+        if not dia["completa"]:
+            raise ValueError("A ese dia le faltan marcas (%s). Completalo antes de "
+                             "pagarlo." % ", ".join(x.lower() for x in dia["faltan"]))
+        if dia["total"] <= 0:
+            raise ValueError("Ese dia vale $0. Revisa el valor hora del trabajador "
+                             "en la pestana Trabajadores.")
+        self.cx.execute("INSERT INTO pagos VALUES (?,?,?,?)",
+                        (tid, fecha, int(dia["total"]),
+                         (hoy or date.today()).isoformat()))
+        self.cx.commit()
+        return dia["total"]
+
+    def desmarcar_pagado(self, tid, fecha):
+        self.cx.execute("DELETE FROM pagos WHERE trabajador_id=? AND fecha=?",
+                        (tid, fecha))
+        self.cx.commit()
+
+    def pagar_pendientes(self, tid, desde=None, hasta=None, hoy=None):
+        """Paga de una vez todos los dias completos y sin pagar del rango."""
+        pagados, total = 0, 0
+        for d in dias_con_valor(self, desde, hasta, tid):
+            if d["completa"] and not d["pagado"] and d["total"] > 0:
+                self.marcar_pagado(tid, d["fecha"], hoy)
+                pagados += 1
+                total += d["total"]
+        return pagados, total
 
     def marcas(self, desde=None, hasta=None, tid=None):
         sql = ("SELECT m.*, t.nombre FROM marcas m "
@@ -730,26 +802,6 @@ def valor_hora_desde_sueldo(sueldo_mensual, horas_semanales):
     return round(sueldo / 30.0 * 7.0 / horas)
 
 
-# ---------------------------------------------------- semanas de pago
-def dia_cierre_de(cfg):
-    try:
-        d = int(float(cfg.get("dia_cierre", 5)))
-    except (TypeError, ValueError):
-        d = 5
-    return d % 7
-
-
-def semana_de(iso, dia_cierre=5):
-    """
-    Semana de pago que contiene esa fecha: los siete dias que terminan en el
-    dia de pago. Con dia_cierre = sabado, va de domingo a sabado.
-    """
-    d = datetime.strptime(iso, "%Y-%m-%d").date()
-    faltan = (dia_cierre - d.weekday()) % 7
-    cierre = d + timedelta(days=faltan)
-    return (cierre - timedelta(days=6)).isoformat(), cierre.isoformat()
-
-
 def texto_dia(iso):
     d = datetime.strptime(iso, "%Y-%m-%d").date()
     return "%s %d de %s" % (DIAS[d.weekday()], d.day, nombre_mes(d.month))
@@ -761,19 +813,29 @@ def dias_con_valor(datos, desde, hasta, tid=None):
     cfg = datos.config()
     trabajadores = dict((t["id"], dict(t))
                         for t in datos.trabajadores(solo_activos=False))
+    pagos = datos.pagos()
     salida = []
     for j in datos.jornadas(desde, hasta, tid):
         t = trabajadores.get(j["trabajador_id"], {})
         d = dict(j)
         d.update(valor_dia(cfg, t, j["horas"]))
         d["extra_dia"] = d["extra"]        # nombre que usan los informes
+        p = pagos.get((j["trabajador_id"], j["fecha"]))
+        d["pagado"] = p is not None
+        d["monto_pagado"] = p["monto"] if p else 0
+        d["pagado_en"] = p["pagado_en"] if p else ""
         salida.append(d)
     salida.sort(key=lambda x: (x["fecha"], x["nombre"]))
     return salida
 
 
-def _agrupar(datos, desde, hasta, titulo, subtitulo):
-    """Arma el resumen de un rango cualquiera sumando el valor de cada dia."""
+def _agrupar(datos, desde, hasta, titulo, subtitulo=""):
+    """
+    Por trabajador: dias trabajados, cuanto se le pago y cuanto se le debe.
+
+    Lo pagado sale del monto que quedo registrado al pagar, no de recalcular:
+    asi lo que ya se entrego no cambia si despues se ajusta un valor.
+    """
     cfg = datos.config()
     dias = dias_con_valor(datos, desde, hasta)
     por_trab = {}
@@ -785,6 +847,10 @@ def _agrupar(datos, desde, hasta, titulo, subtitulo):
         suyos = por_trab.get(t["id"])
         if not suyos:
             continue
+        pagados = [d for d in suyos if d["pagado"]]
+        pendientes = [d for d in suyos
+                      if not d["pagado"] and d["completa"] and d["total"] > 0]
+        incompletos = [d for d in suyos if not d["completa"]]
         f = {
             "id": t["id"], "nombre": t["nombre"],
             "contrato": horas_contrato_de(cfg, dict(t)),
@@ -792,21 +858,21 @@ def _agrupar(datos, desde, hasta, titulo, subtitulo):
             "valor_extra": valor_hora_extra(cfg, dict(t)),
             "turnos": len(suyos),
             "horas": round(sum(d["horas"] for d in suyos), 2),
-            "colacion": round(sum(d["colacion"] for d in suyos) / 60.0, 2),
             "ordinarias": round(sum(d["normales"] for d in suyos), 2),
             "extra": round(sum(d["extra"] for d in suyos), 2),
-            "pago_ordinario": sum(d["pago_normal"] for d in suyos),
-            "pago_extra": sum(d["pago_extra"] for d in suyos),
-            "dias": suyos, "detalle": suyos,
-            "incompletos": [d for d in suyos if not d["completa"]],
+            "total": sum(d["total"] for d in suyos),
+            "dias_pagados": len(pagados),
+            "pagado": sum(d["monto_pagado"] for d in pagados),
+            "dias_pendientes": len(pendientes),
+            "por_pagar": sum(d["total"] for d in pendientes),
+            "dias": suyos, "detalle": suyos, "incompletos": incompletos,
         }
-        f["total"] = f["pago_ordinario"] + f["pago_extra"]
         filas.append(f)
 
     filas.sort(key=lambda f: f["nombre"].lower())
     totales = {}
-    for k in ("turnos", "horas", "colacion", "ordinarias", "extra",
-              "pago_ordinario", "pago_extra", "total"):
+    for k in ("turnos", "horas", "ordinarias", "extra", "total",
+              "dias_pagados", "pagado", "dias_pendientes", "por_pagar"):
         v = sum(f[k] for f in filas)
         totales[k] = round(v, 2) if isinstance(v, float) else v
     return {
@@ -814,37 +880,36 @@ def _agrupar(datos, desde, hasta, titulo, subtitulo):
         "cfg": cfg, "filas": filas, "totales": totales,
         "regla_extra": texto_regla_extra(cfg),
         "contrato": _limpio(cfg.get("horas_contrato", "7")),
-        "umbral_semanal": _limpio(cfg.get("umbral_semanal", "45")),
-        "umbral_diario": _limpio(cfg.get("horas_contrato", "7")),
-        "regla": "diaria",
         "negocio": cfg.get("negocio", NEGOCIO_DEF),
         "ciudad": cfg.get("ciudad", CIUDAD_DEF),
     }
 
 
-def resumen_semanal(datos, fecha_dentro):
-    """
-    La semana de pago que contiene esa fecha. Termina en el dia de pago
-    configurado (por defecto el sabado), asi que el total que muestra es
-    justo lo que hay que pagar ese dia.
-    """
-    cfg = datos.config()
-    desde, hasta = semana_de(fecha_dentro, dia_cierre_de(cfg))
-    r = _agrupar(datos, desde, hasta,
-                 "Semana del %s al %s" % (texto_dia(desde), texto_dia(hasta)),
-                 "Se paga el %s" % texto_dia(hasta))
-    r["lunes"] = desde
-    r["domingo"] = hasta
-    r["pago_el"] = hasta
-    return r
-
-
 def resumen_mensual(datos, anio, mes):
-    """El mes completo. Es la suma de los dias, igual que la semana."""
+    """Un mes completo, por trabajador, con lo pagado y lo pendiente."""
     desde = "%04d-%02d-01" % (anio, mes)
     hasta = "%04d-%02d-%02d" % (anio, mes, ultimo_dia(anio, mes))
     r = _agrupar(datos, desde, hasta,
-                 "%s de %d" % (nombre_mes(mes).capitalize(), anio),
-                 "Mes completo")
+                 "%s de %d" % (nombre_mes(mes).capitalize(), anio))
     r["anio"], r["mes"] = anio, mes
     return r
+
+
+def resumen_todo(datos):
+    """Todo lo registrado, sin importar el mes."""
+    return _agrupar(datos, None, None, "Todo lo registrado")
+
+
+def pendiente_fuera(datos, desde, hasta):
+    """
+    Dias completos y sin pagar que quedan FUERA del rango que se esta mirando.
+    Sirve para avisar que alguien tiene plata pendiente de otro mes.
+    """
+    n, total = 0, 0
+    for d in dias_con_valor(datos, None, None):
+        if d["pagado"] or not d["completa"]:
+            continue
+        if (desde and d["fecha"] < desde) or (hasta and d["fecha"] > hasta):
+            n += 1
+            total += d["total"]
+    return n, total

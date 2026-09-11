@@ -31,7 +31,7 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 AUTOR = "Macoem"
 
 FUENTE = "Segoe UI" if sys.platform.startswith("win") else "Helvetica"
@@ -58,8 +58,6 @@ class App(tk.Tk):
         self.configure(bg=PAPEL)
 
         self.sel_trab = None          # trabajador elegido en la pantalla de marcar
-        self.periodo = "semana"
-        self.ancla = date.today().isoformat()
 
         self._estilos()
         self._cabecera()
@@ -240,7 +238,7 @@ class App(tk.Tk):
                                         hechas.get(tipo, "--:--")))
         resumen = "\n".join(partes)
         if est["horas"]:
-            resumen += "\n\nLlevas %s h trabajadas" % N.horas_txt(est["horas"])
+            resumen += "\n\nLlevas %s horas trabajadas" % N.hhmm_txt(est["horas"])
         self.lbl_hoy.config(text=resumen)
 
     def marcar(self):
@@ -260,10 +258,11 @@ class App(tk.Tk):
             fg=VERDE, bg=BLANCO)
         self.after(9000, lambda: self.lbl_aviso.config(text=""))
 
-    # ====================================================== pestana JORNADAS
+    # ================================================= pestana DIAS TRABAJADOS
     def _tab_jornadas(self):
+        """Cada dia de cada trabajador: horas, lo que vale, y si ya se pago."""
         p = ttk.Frame(self, padding=14)
-        self.tabs.add(p, text="  Jornadas  ")
+        self.tabs.add(p, text="  Dias trabajados  ")
 
         f = ttk.Frame(p)
         f.pack(fill="x")
@@ -272,43 +271,79 @@ class App(tk.Tk):
         self.cb_mes_j.pack(side="left", padx=(0, 14))
         self.cb_mes_j.bind("<<ComboboxSelected>>", lambda e: self.recargar_jornadas())
         ttk.Label(f, text="Trabajador", style="Rotulo.TLabel").pack(side="left", padx=(0, 6))
-        self.cb_filtro_trab = ttk.Combobox(f, state="readonly", width=20, font=(FUENTE, 10))
-        self.cb_filtro_trab.pack(side="left")
+        self.cb_filtro_trab = ttk.Combobox(f, state="readonly", width=18, font=(FUENTE, 10))
+        self.cb_filtro_trab.pack(side="left", padx=(0, 14))
         self.cb_filtro_trab.bind("<<ComboboxSelected>>", lambda e: self.recargar_jornadas())
-        ttk.Button(f, text="Corregir marcas del dia", style="Principal.TButton",
-                   command=self.abrir_editor).pack(side="right")
+        self.solo_pendientes = tk.BooleanVar(value=False)
+        ttk.Checkbutton(f, text="Solo lo que falta pagar", variable=self.solo_pendientes,
+                        command=self.recargar_jornadas).pack(side="left")
 
         tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
-                 text="Doble clic sobre un dia para corregir sus marcas. Los dias "
-                      "a los que les falta alguna marca salen en ambar."
+                 text="Haz clic en el cuadrado de la izquierda para marcar el dia como "
+                      "pagado.   Doble clic en la fila para corregir las horas."
                  ).pack(fill="x", pady=(8, 4))
         self.lbl_total_j = tk.Label(p, text="", bg=PAPEL, fg=TINTA,
                                     font=(FUENTE, 12, "bold"), anchor="e")
         self.lbl_total_j.pack(side="bottom", fill="x", pady=(8, 0))
 
-        cols = ("fecha", "dia", "trab", "e", "ci", "cf", "s",
-                "horas", "norm", "extra", "pnorm", "pextra", "total")
-        titulos = ["Fecha", "Dia", "Trabajador", "Entrada", "Col. ini",
-                   "Col. fin", "Salida", "Horas", "Normal", "Extra",
-                   "$ normal", "$ extra", "VALOR DEL DIA"]
-        anchos = [78, 44, 116, 56, 56, 56, 56, 52, 54, 48, 76, 72, 104]
+        cols = ("pagado", "fecha", "trab", "horas", "norm", "extra", "total")
+        titulos = ["Pagado", "Fecha", "Trabajador", "Horas trabajadas",
+                   "Horas normales", "Horas extra", "A PAGAR"]
+        anchos = [70, 128, 190, 124, 124, 110, 130]
         marco = ttk.Frame(p)
         marco.pack(fill="both", expand=True)
         self.tv_j = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse")
         for c, t, a in zip(cols, titulos, anchos):
             self.tv_j.heading(c, text=t)
-            self.tv_j.column(c, width=a, minwidth=a, stretch=(c == "trab"),
+            self.tv_j.column(c, width=a, minwidth=60, stretch=(c == "trab"),
                              anchor="w" if c == "trab" else
-                             ("e" if c in ("pnorm", "pextra", "total") else "center"))
+                             ("e" if c == "total" else "center"))
         self.tv_j.tag_configure("falta", background=AMBAR_CLARO, foreground=AMBAR)
-        self.tv_j.tag_configure("conextra", foreground=ROJO)
+        self.tv_j.tag_configure("pagado", foreground=VERDE)
         sb = ttk.Scrollbar(marco, orient="vertical", command=self.tv_j.yview)
-        sbh = ttk.Scrollbar(marco, orient="horizontal", command=self.tv_j.xview)
-        self.tv_j.configure(yscrollcommand=sb.set, xscrollcommand=sbh.set)
+        self.tv_j.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
-        sbh.pack(side="bottom", fill="x")
         self.tv_j.pack(side="left", fill="both", expand=True)
-        self.tv_j.bind("<Double-1>", lambda e: self.abrir_editor())
+        self.tv_j.bind("<Button-1>", self._clic_en_dia)
+        self.tv_j.bind("<Double-1>", self._doble_clic_en_dia)
+
+    def _doble_clic_en_dia(self, evento):
+        # El doble clic sobre el cuadrado de pagado no abre el corrector.
+        if self.tv_j.identify_column(evento.x) == "#1":
+            return "break"
+        self.abrir_editor()
+
+    def _clic_en_dia(self, evento):
+        """Un clic en la columna Pagado cambia el check de ese dia."""
+        if self.tv_j.identify_region(evento.x, evento.y) != "cell":
+            return
+        if self.tv_j.identify_column(evento.x) != "#1":
+            return
+        fila = self.tv_j.identify_row(evento.y)
+        if fila:
+            self.cambiar_pagado(fila)
+            return "break"
+
+    def cambiar_pagado(self, fila):
+        fecha, tid = fila.split("|")
+        tid = int(tid)
+        pago = self.datos.pago_de(tid, fecha)
+        nombre = next((t["nombre"] for t in self.datos.trabajadores(False)
+                       if t["id"] == tid), "?")
+        if pago:
+            if not messagebox.askyesno(
+                    "Quitar el pago",
+                    "El %s de %s figura pagado (%s, el %s).\n\n"
+                    "¿Quitar el check? El dia vuelve a quedar por pagar."
+                    % (fecha, nombre, N.pesos(pago["monto"]), pago["pagado_en"])):
+                return
+            self.datos.desmarcar_pagado(tid, fecha)
+        else:
+            try:
+                self.datos.marcar_pagado(tid, fecha)
+            except ValueError as e:
+                return messagebox.showwarning("No se puede marcar como pagado", str(e))
+        self.recargar_todo()
 
     def abrir_editor(self):
         sel = self.tv_j.selection()
@@ -316,75 +351,110 @@ class App(tk.Tk):
             return messagebox.showinfo("Elige un dia",
                                        "Selecciona una fila de la lista.")
         fecha, tid = sel[0].split("|")
+        pago = self.datos.pago_de(int(tid), fecha)
+        if pago:
+            return messagebox.showinfo(
+                "Dia ya pagado",
+                "Ese dia ya se pago (%s, el %s), asi que no se puede corregir.\n\n"
+                "Si hay que arreglarlo, primero quitale el check de pagado."
+                % (N.pesos(pago["monto"]), pago["pagado_en"]))
         EditorMarcas(self, int(tid), fecha)
 
-    # ======================================================= pestana RESUMEN
+    # =============================================== pestana PAGOS POR PERSONA
     def _tab_resumen(self):
+        """Por trabajador: dias, cuanto se le pago y cuanto se le debe."""
         p = ttk.Frame(self, padding=14)
-        self.tabs.add(p, text="  Resumen y pago  ")
+        self.tabs.add(p, text="  Pagos por persona  ")
 
         barra = ttk.Frame(p)
         barra.pack(fill="x")
-        self.btn_sem = ttk.Button(barra, text="Semana", style="Principal.TButton",
-                                  command=lambda: self.cambiar_periodo("semana"))
-        self.btn_sem.pack(side="left")
-        self.btn_mes = ttk.Button(barra, text="Mes",
-                                  command=lambda: self.cambiar_periodo("mes"))
-        self.btn_mes.pack(side="left", padx=(6, 14))
-        ttk.Button(barra, text="◀", width=3, command=lambda: self.mover(-1)).pack(side="left")
-        ttk.Button(barra, text="▶", width=3, command=lambda: self.mover(1)).pack(side="left", padx=(4, 10))
-        ttk.Button(barra, text="Hoy", command=self.ir_hoy).pack(side="left")
+        ttk.Label(barra, text="Periodo", style="Rotulo.TLabel").pack(side="left", padx=(0, 6))
+        self.cb_mes_r = ttk.Combobox(barra, state="readonly", width=20, font=(FUENTE, 10))
+        self.cb_mes_r.pack(side="left")
+        self.cb_mes_r.bind("<<ComboboxSelected>>", lambda e: self.recargar_resumen())
         ttk.Button(barra, text="Exportar a Excel", style="Principal.TButton",
                    command=lambda: self.exportar("excel")).pack(side="right", padx=(8, 0))
         ttk.Button(barra, text="Exportar a PDF",
                    command=lambda: self.exportar("pdf")).pack(side="right")
 
-        self.lbl_periodo = tk.Label(p, text="", bg=PAPEL, fg=TINTA,
-                                    font=(FUENTE, 14, "bold"), anchor="w")
-        self.lbl_periodo.pack(fill="x", pady=(12, 8))
+        self.lbl_aviso_r = tk.Label(p, text="", bg=AMBAR_CLARO, fg=AMBAR,
+                                    font=(FUENTE, 10, "bold"), anchor="w", padx=12, pady=6)
 
-        self.lbl_regla = tk.Label(p, text="", bg=PAPEL, fg=SUAVE, font=(FUENTE, 9),
-                                  anchor="w", justify="left", wraplength=1040)
-        self.lbl_regla.pack(side="bottom", fill="x", pady=(10, 0))
-
-        cols = ("trab", "dias", "horas", "ord", "extra", "vh", "vhe",
-                "pord", "pext", "total")
-        titulos = ["Trabajador", "Dias", "Horas", "H. normales", "H. EXTRA",
-                   "Valor hora", "Valor h. extra", "$ normales", "$ extra",
-                   "TOTAL A PAGAR"]
-        anchos = [132, 46, 62, 78, 66, 78, 90, 88, 84, 110]
+        cols = ("trab", "dias", "pagados", "pagado", "pend", "debe")
+        titulos = ["Trabajador", "Dias trabajados", "Dias pagados", "Se le ha pagado",
+                   "Dias por pagar", "SE LE DEBE"]
+        anchos = [190, 120, 110, 140, 110, 140]
         marco = ttk.Frame(p)
-        marco.pack(fill="both", expand=True)
-        self.tv_r = ttk.Treeview(marco, columns=cols, show="headings", selectmode="none")
+        marco.pack(fill="x", pady=(12, 0))
+        self.tv_r = ttk.Treeview(marco, columns=cols, show="headings",
+                                 selectmode="browse", height=5)
         for c, t, a in zip(cols, titulos, anchos):
             self.tv_r.heading(c, text=t)
-            self.tv_r.column(c, width=a, minwidth=a, stretch=(c == "trab"),
-                             anchor="e" if c != "trab" else "w")
+            self.tv_r.column(c, width=a, minwidth=60, stretch=(c == "trab"),
+                             anchor="w" if c == "trab" else "e")
         self.tv_r.tag_configure("total", font=(FUENTE, 10, "bold"), background="#E6E1DC")
-        self.tv_r.tag_configure("extra", foreground=ROJO)
-        sbr = ttk.Scrollbar(marco, orient="horizontal", command=self.tv_r.xview)
-        self.tv_r.configure(xscrollcommand=sbr.set)
-        sbr.pack(side="bottom", fill="x")
-        self.tv_r.pack(fill="both", expand=True)
+        self.tv_r.tag_configure("debe", foreground=ROJO)
+        self.tv_r.pack(fill="x")
+        self.tv_r.bind("<<TreeviewSelect>>", lambda e: self.recargar_detalle())
 
-    def cambiar_periodo(self, cual):
-        self.periodo = cual
-        self.btn_sem.config(style="Principal.TButton" if cual == "semana" else "TButton")
-        self.btn_mes.config(style="Principal.TButton" if cual == "mes" else "TButton")
-        self.recargar_resumen()
+        cab = ttk.Frame(p)
+        cab.pack(fill="x", pady=(16, 4))
+        self.lbl_det = tk.Label(cab, text="", bg=PAPEL, fg=TINTA,
+                                font=(FUENTE, 12, "bold"), anchor="w")
+        self.lbl_det.pack(side="left")
+        self.btn_pagar_todo = ttk.Button(cab, text="Pagar todo lo pendiente",
+                                         style="Principal.TButton",
+                                         command=self.pagar_todo, state="disabled")
+        self.btn_pagar_todo.pack(side="right")
 
-    def mover(self, n):
-        d = datetime.strptime(self.ancla, "%Y-%m-%d").date()
-        if self.periodo == "semana":
-            self.ancla = (d + timedelta(days=7 * n)).isoformat()
-        else:
-            self.ancla = date(d.year + (d.month + n - 1) // 12,
-                              (d.month + n - 1) % 12 + 1, 1).isoformat()
-        self.recargar_resumen()
+        cols = ("fecha", "horas", "norm", "extra", "valor", "estado")
+        titulos = ["Fecha", "Horas", "Normales", "Extra", "Valor del dia", "Estado"]
+        anchos = [130, 90, 90, 80, 120, 220]
+        marco2 = ttk.Frame(p)
+        marco2.pack(fill="both", expand=True)
+        self.tv_d = ttk.Treeview(marco2, columns=cols, show="headings", selectmode="none")
+        for c, t, a in zip(cols, titulos, anchos):
+            self.tv_d.heading(c, text=t)
+            self.tv_d.column(c, width=a, minwidth=60, stretch=(c == "estado"),
+                             anchor="w" if c == "estado" else
+                             ("e" if c == "valor" else "center"))
+        self.tv_d.tag_configure("pagado", foreground=VERDE)
+        self.tv_d.tag_configure("falta", background=AMBAR_CLARO, foreground=AMBAR)
+        sb2 = ttk.Scrollbar(marco2, orient="vertical", command=self.tv_d.yview)
+        self.tv_d.configure(yscrollcommand=sb2.set)
+        sb2.pack(side="right", fill="y")
+        self.tv_d.pack(side="left", fill="both", expand=True)
 
-    def ir_hoy(self):
-        self.ancla = date.today().isoformat()
-        self.recargar_resumen()
+    def _periodo_r(self):
+        """(desde, hasta, titulo) del periodo elegido en Pagos por persona."""
+        t = self.cb_mes_r.get()
+        if t == "Todo" or not t:
+            return None, None, "Todo lo registrado"
+        for ym in self._meses_lista:
+            if self._mes_texto(ym) == t:
+                a, m = int(ym[:4]), int(ym[5:7])
+                return "%s-01" % ym, "%s-%02d" % (ym, N.ultimo_dia(a, m)), t
+        return None, None, "Todo lo registrado"
+
+    def pagar_todo(self):
+        sel = self.tv_r.selection()
+        if not sel or sel[0] == "total":
+            return
+        tid = int(sel[0])
+        desde, hasta, titulo = self._periodo_r()
+        fila = [f for f in self._resumen["filas"] if f["id"] == tid][0]
+        if not fila["dias_pendientes"]:
+            return
+        if not messagebox.askyesno(
+                "Pagar lo pendiente",
+                "%s tiene %d dias por pagar en %s.\n\n"
+                "Total: %s\n\n¿Marcarlos todos como pagados hoy?"
+                % (fila["nombre"], fila["dias_pendientes"], titulo.lower(),
+                   N.pesos(fila["por_pagar"]))):
+            return
+        self.datos.pagar_pendientes(tid, desde, hasta)
+        self.recargar_todo()
+        self.tv_r.selection_set(str(tid))
 
     # ================================================== pestana TRABAJADORES
     def _tab_trabajadores(self):
@@ -443,26 +513,15 @@ class App(tk.Tk):
         p = ttk.Frame(self, padding=14)
         self.tabs.add(p, text="  Configuracion  ")
 
-        a = ttk.LabelFrame(p, text=" JORNADA Y DIA DE PAGO ", padding=14)
+        a = ttk.LabelFrame(p, text=" JORNADA DEL CONTRATO ", padding=14)
         a.pack(fill="x")
         ttk.Label(a, text="Horas de contrato al dia", style="Rotulo.TLabel").grid(
             row=0, column=0, sticky="w", padx=(0, 14), pady=(0, 2))
         self.e_contrato = ttk.Entry(a, width=8, font=(MONO, 10), justify="right")
         self.e_contrato.grid(row=1, column=0, padx=(0, 14), sticky="nw")
-        ttk.Label(a, text="Se paga el dia", style="Rotulo.TLabel").grid(
-            row=0, column=1, sticky="w", padx=(0, 14), pady=(0, 2))
-        self.cb_cierre = ttk.Combobox(a, state="readonly", width=11, font=(FUENTE, 10),
-                                      values=[d.capitalize() for d in N.DIAS])
-        self.cb_cierre.grid(row=1, column=1, padx=(0, 14), sticky="nw")
-        ttk.Label(a, text="Horas semanales (informativo)", style="Rotulo.TLabel").grid(
-            row=0, column=2, sticky="w", padx=(0, 14), pady=(0, 2))
-        self.e_us = ttk.Entry(a, width=8, font=(MONO, 10), justify="right")
-        self.e_us.grid(row=1, column=2, padx=(0, 14), sticky="nw")
         tk.Label(a, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), justify="left", anchor="w",
-                 text="Todo lo que se pase de las horas de contrato EN EL DIA es hora extra.\n"
-                      "La semana se acumula sola y cierra el dia de pago que elijas, para que\n"
-                      "el total que muestra sea justo lo que hay que pagar ese dia."
-                 ).grid(row=1, column=3, sticky="nw")
+                 text="Todo lo que se trabaje por sobre estas horas, en el dia, es hora extra."
+                 ).grid(row=1, column=1, sticky="w")
 
         b = ttk.LabelFrame(p, text=" CUANTO VALE UNA HORA EXTRA ", padding=14)
         b.pack(fill="x", pady=(14, 0))
@@ -635,8 +694,6 @@ class App(tk.Tk):
         try:
             cambios = {
                 "horas_contrato": self._numero(self.e_contrato.get()) or 7,
-                "umbral_semanal": self._numero(self.e_us.get()) or 45,
-                "dia_cierre": max(0, self.cb_cierre.current()),
                 "umbral_diario": self._numero(self.e_contrato.get()) or 7,
                 "regla": "diaria",
                 "modo_extra": self.modo_extra.get(),
@@ -652,14 +709,14 @@ class App(tk.Tk):
         messagebox.showinfo("Listo", "Configuracion guardada.")
 
     def exportar(self, formato):
-        if self.periodo == "semana":
-            lunes = N.lunes_de(self.ancla)
-            r = N.resumen_semanal(self.datos, lunes)
-            nombre_base = "horas-semana-%s" % lunes
+        desde, hasta, titulo = self._periodo_r()
+        if desde:
+            a, m = int(desde[:4]), int(desde[5:7])
+            r = N.resumen_mensual(self.datos, a, m)
+            nombre_base = "pagos-%04d-%02d" % (a, m)
         else:
-            d = datetime.strptime(self.ancla, "%Y-%m-%d").date()
-            r = N.resumen_mensual(self.datos, d.year, d.month)
-            nombre_base = "horas-%04d-%02d" % (d.year, d.month)
+            r = N.resumen_todo(self.datos)
+            nombre_base = "pagos-todo-%s" % date.today().isoformat()
         if not r["filas"]:
             return messagebox.showinfo("Sin datos",
                                        "No hay marcas registradas en ese periodo.")
@@ -726,6 +783,9 @@ class App(tk.Tk):
         actual = self.cb_filtro_trab.get()
         self.cb_filtro_trab["values"] = ["Todos"] + [t["nombre"] for t in self._trabs]
         self.cb_filtro_trab.set(actual if actual in self.cb_filtro_trab["values"] else "Todos")
+        actual = self.cb_mes_r.get()
+        self.cb_mes_r["values"] = textos + ["Todo"]
+        self.cb_mes_r.set(actual if actual in self.cb_mes_r["values"] else textos[0])
 
         self.recargar_jornadas()
         self.recargar_resumen()
@@ -747,56 +807,106 @@ class App(tk.Tk):
             if x["nombre"] == self.cb_filtro_trab.get():
                 tid = x["id"]
         dias = N.dias_con_valor(self.datos, desde, hasta, tid)
+        if self.solo_pendientes.get():
+            dias = [d for d in dias if not d["pagado"]]
         dias.sort(key=lambda x: (x["fecha"], x["nombre"]), reverse=True)
-        total = 0
+
+        por_pagar = pagado = 0
         for j in dias:
-            tags = () if j["completa"] else ("falta",)
-            if j["extra"] > 0 and j["completa"]:
-                tags = ("conextra",)
-            total += j["total"]
+            if not j["completa"]:
+                tags, marca = ("falta",), "  falta marca"
+                a_pagar = "falta marcar"
+            elif j["pagado"]:
+                tags, marca = ("pagado",), "  ☑"
+                a_pagar = N.pesos(j["monto_pagado"])
+                pagado += j["monto_pagado"]
+            else:
+                tags, marca = (), "  ☐"
+                a_pagar = N.pesos(j["total"])
+                por_pagar += j["total"]
             self.tv_j.insert("", "end", iid=j["id"], tags=tags, values=(
-                j["fecha"], N.nombre_dia(j["fecha"])[:3], j["nombre"],
-                j["entrada"] or "--:--", j["colacion_inicio"] or "--:--",
-                j["colacion_fin"] or "--:--", j["salida"] or "--:--",
-                N.horas_txt(j["horas"]), N.horas_txt(j["normales"]),
-                N.horas_txt(j["extra"]) if j["extra"] else "-",
-                N.pesos(j["pago_normal"]),
-                N.pesos(j["pago_extra"]) if j["pago_extra"] else "-",
-                N.pesos(j["total"])))
+                marca,
+                "%s %s" % (N.nombre_dia(j["fecha"])[:3], j["fecha"][8:10] + "-" +
+                           j["fecha"][5:7]),
+                j["nombre"],
+                N.hhmm_txt(j["horas"]) if j["completa"] else "-",
+                N.hhmm_txt(j["normales"]) if j["completa"] else "-",
+                N.hhmm_txt(j["extra"]) if j["extra"] else "-",
+                a_pagar))
         self.lbl_total_j.config(
-            text="%d dias   ·   suma de los dias mostrados:  %s"
-                 % (len(dias), N.pesos(total)))
+            text="Falta pagar:  %s        Ya pagado:  %s"
+                 % (N.pesos(por_pagar), N.pesos(pagado)))
 
     def recargar_resumen(self):
+        elegido = self.tv_r.selection()
         for f in self.tv_r.get_children():
             self.tv_r.delete(f)
-        if self.periodo == "semana":
-            r = N.resumen_semanal(self.datos, self.ancla)
-            titulo = "%s        %s" % (r["titulo"], r["subtitulo"].upper())
-        else:
-            d = datetime.strptime(self.ancla, "%Y-%m-%d").date()
-            r = N.resumen_mensual(self.datos, d.year, d.month)
-            titulo = r["titulo"]
-        nota = ("Jornada del contrato: %s h al dia. Todo lo que se pasa de ahi en el "
-                "dia son horas extra, y la hora extra se paga con %s.\n"
-                "El total de arriba ya viene sumado: es lo que hay que pagar."
-                % (r["contrato"], r["regla_extra"]))
-        self.lbl_periodo.config(text=titulo)
-        self.lbl_regla.config(text=nota)
+        desde, hasta, titulo = self._periodo_r()
+        r = N.resumen_mensual(self.datos, int(desde[:4]), int(desde[5:7])) \
+            if desde else N.resumen_todo(self.datos)
+        self._resumen = r
 
         for f in r["filas"]:
-            self.tv_r.insert("", "end", tags=("extra",) if f["extra"] > 0 else (), values=(
-                f["nombre"], f["turnos"], N.horas_txt(f["horas"]),
-                N.horas_txt(f["ordinarias"]), N.horas_txt(f["extra"]),
-                N.pesos(f["valor_hora"]), N.pesos(f["valor_extra"]),
-                N.pesos(f["pago_ordinario"]), N.pesos(f["pago_extra"]),
-                N.pesos(f["total"])))
+            self.tv_r.insert("", "end", iid=str(f["id"]),
+                             tags=("debe",) if f["por_pagar"] else (), values=(
+                f["nombre"], f["turnos"], f["dias_pagados"], N.pesos(f["pagado"]),
+                f["dias_pendientes"], N.pesos(f["por_pagar"])))
         t = r["totales"]
-        self.tv_r.insert("", "end", tags=("total",), values=(
-            "TOTAL", t["turnos"], N.horas_txt(t["horas"]),
-            N.horas_txt(t["ordinarias"]), N.horas_txt(t["extra"]), "", "",
-            N.pesos(t["pago_ordinario"]), N.pesos(t["pago_extra"]),
-            N.pesos(t["total"])))
+        self.tv_r.insert("", "end", iid="total", tags=("total",), values=(
+            "TOTAL", t["turnos"], t["dias_pagados"], N.pesos(t["pagado"]),
+            t["dias_pendientes"], N.pesos(t["por_pagar"])))
+
+        n, plata = N.pendiente_fuera(self.datos, desde, hasta)
+        if n:
+            self.lbl_aviso_r.config(
+                text="Ojo: fuera de %s hay %d dias sin pagar, por %s."
+                     % (titulo.lower(), n, N.pesos(plata)))
+            self.lbl_aviso_r.pack(fill="x", pady=(10, 0), after=self.cb_mes_r.master)
+        else:
+            self.lbl_aviso_r.pack_forget()
+
+        if elegido and self.tv_r.exists(elegido[0]):
+            self.tv_r.selection_set(elegido[0])
+        self.recargar_detalle()
+
+    def recargar_detalle(self):
+        """Los dias de la persona elegida: lo que vale cada uno y si se pago."""
+        for f in self.tv_d.get_children():
+            self.tv_d.delete(f)
+        sel = self.tv_r.selection()
+        if not sel or sel[0] == "total":
+            self.lbl_det.config(text="Elige a una persona para ver sus dias")
+            self.btn_pagar_todo.config(state="disabled", text="Pagar todo lo pendiente")
+            return
+        fila = [f for f in self._resumen["filas"] if f["id"] == int(sel[0])]
+        if not fila:
+            return
+        fila = fila[0]
+        self.lbl_det.config(text="Dias de %s" % fila["nombre"])
+        for d in sorted(fila["dias"], key=lambda x: x["fecha"]):
+            if not d["completa"]:
+                tags, estado = ("falta",), "falta marcar: " + ", ".join(
+                    x.lower() for x in d["faltan"])
+                valor = "-"
+            elif d["pagado"]:
+                tags, estado = ("pagado",), "pagado el %s-%s" % (
+                    d["pagado_en"][8:10], d["pagado_en"][5:7])
+                valor = N.pesos(d["monto_pagado"])
+            else:
+                tags, estado, valor = (), "por pagar", N.pesos(d["total"])
+            self.tv_d.insert("", "end", tags=tags, values=(
+                "%s %s" % (N.nombre_dia(d["fecha"])[:3], d["fecha"][8:10] + "-" +
+                           d["fecha"][5:7]),
+                N.hhmm_txt(d["horas"]) if d["completa"] else "-",
+                N.hhmm_txt(d["normales"]) if d["completa"] else "-",
+                N.hhmm_txt(d["extra"]) if d["extra"] else "-",
+                valor, estado))
+        if fila["dias_pendientes"]:
+            self.btn_pagar_todo.config(
+                state="normal",
+                text="Pagar lo pendiente:  %s" % N.pesos(fila["por_pagar"]))
+        else:
+            self.btn_pagar_todo.config(state="disabled", text="Todo pagado")
 
     def recargar_trabajadores(self):
         for f in self.tv_t.get_children():
@@ -824,8 +934,6 @@ class App(tk.Tk):
     def recargar_config(self):
         c = self.datos.config()
         self._set(self.e_contrato, N._limpio(c.get("horas_contrato", "7")))
-        self._set(self.e_us, N._limpio(c.get("umbral_semanal", "45")))
-        self.cb_cierre.current(N.dia_cierre_de(c))
         self.modo_extra.set(c.get("modo_extra", "recargo"))
         self.e_recargo.config(state="normal")
         self.e_vextra.config(state="normal")
@@ -1004,7 +1112,7 @@ class EditorMarcas(tk.Toplevel):
                            "biometrico": "reloj biometrico"}.get(origen, "falta")
                      ).grid(row=i, column=2, sticky="w")
         self.lbl_total.config(text="Horas del dia: %s"
-                                   % N.horas_txt(N.horas_de_marcas(marcas)))
+                                   % N.hhmm_txt(N.horas_de_marcas(marcas)))
 
     @staticmethod
     def _acomodar(evento):

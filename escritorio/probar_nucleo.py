@@ -68,27 +68,22 @@ anar  = [f for f in r["filas"] if f["nombre"] == "Ana"][0]
 
 check("Juan turnos", juanr["turnos"], 6)
 check("Juan horas", juanr["horas"], 54.0)
-check("Juan colacion (h)", juanr["colacion"], 6.0)
 # Contrato de 7 h al dia: cada dia de 9 h deja 2 extra.
 check("Juan extra (2 por dia x 6)", juanr["extra"], 12.0)
 check("Juan ordinarias 7 x 6", juanr["ordinarias"], 42.0)
 check("Juan ordinarias+extra = horas", juanr["ordinarias"] + juanr["extra"], juanr["horas"])
-check("Juan pago ordinario 42*3000", juanr["pago_ordinario"], 126000)
-check("Juan pago extra 12*4500", juanr["pago_extra"], 54000)
+# 42 normales x 3000 + 12 extra x 4500 = 126.000 + 54.000
 check("Juan total", juanr["total"], 180000)
+check("sin pagar, se le debe todo", juanr["por_pagar"], 180000)
 check("Ana horas", anar["horas"], 16.0)
 check("Ana extra (1 por dia x 2)", anar["extra"], 2.0)
 check("Ana total 14*4000 + 2*6000", anar["total"], 68000)
 check("total general", r["totales"]["total"], 248000)
 
-print("\n--- la semana es la suma de sus dias ---")
-sem = N.resumen_semanal(d, "2026-09-08")
-js = [f for f in sem["filas"] if f["nombre"] == "Juan"][0]
-check("misma extra que en el mes", js["extra"], 12.0)
-check("mismo pago extra", js["pago_extra"], 54000)
-check("detalle de 6 dias", len(js["dias"]), 6)
+print("\n--- el total es la suma de sus dias ---")
+check("detalle de 6 dias", len(juanr["dias"]), 6)
 check("el total es la suma de los dias",
-      js["total"], sum(x["total"] for x in js["dias"]))
+      juanr["total"], sum(x["total"] for x in juanr["dias"]))
 
 print("\n--- semana a caballo entre dos meses ---")
 ruta2 = os.path.join(tempfile.mkdtemp(), "q.sqlite3")

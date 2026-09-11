@@ -163,18 +163,14 @@ print("\n--- valor hora desde el sueldo del contrato ---")
 check("553.553 con 42 h semanales", N.valor_hora_desde_sueldo(553553, 42), 3075)
 check("sin sueldo da 0", N.valor_hora_desde_sueldo(0, 42), 0.0)
 
-print("\n--- la semana se acumula sola y cierra el sabado ---")
-check("semana del 7 (lunes)", N.semana_de("2026-09-07", 5), ("2026-09-06", "2026-09-12"))
-check("semana del 12 (sabado)", N.semana_de("2026-09-12", 5), ("2026-09-06", "2026-09-12"))
-check("el domingo 13 ya es otra", N.semana_de("2026-09-13", 5), ("2026-09-13", "2026-09-19"))
-sem = N.resumen_semanal(d, "2026-09-07")
-isar = [f for f in sem["filas"] if f["nombre"] == "Isabel"][0]
+print("\n--- el mes suma los dias de cada persona ---")
+mes = N.resumen_mensual(d, 2026, 9)
+isar = [f for f in mes["filas"] if f["nombre"] == "Isabel"][0]
 check("suma los dos dias", isar["turnos"], 2)
-check("horas de la semana", isar["horas"], 17.0)
-check("extra de la semana", isar["extra"], 3.0)
+check("horas del periodo", isar["horas"], 17.0)
+check("extra del periodo", isar["extra"], 3.0)
 check("total = suma de los dias", isar["total"], 33225 + 21525)
-check("se paga el sabado", sem["pago_el"], "2026-09-12")
-check("dice cuando se paga", "sabado" in sem["subtitulo"], True)
+check("todo por pagar", isar["por_pagar"], 33225 + 21525)
 
 print("\n--- jornada propia por trabajador ---")
 medio = d.agregar_trabajador("Media jornada", 4000, 5000, 4)   # contrato de 4 h
@@ -191,11 +187,12 @@ check("usa su propio valor extra", md["pago_extra"], 5000)
 print("\n--- dias incompletos quedan marcados ---")
 suelto = d.agregar_trabajador("Incompleto", 1000)
 d.agregar_marca(suelto, "2026-09-08", "entrada", "09:00")
-sem = N.resumen_semanal(d, "2026-09-07")
-inc = [f for f in sem["filas"] if f["nombre"] == "Incompleto"][0]
+mes = N.resumen_mensual(d, 2026, 9)
+inc = [f for f in mes["filas"] if f["nombre"] == "Incompleto"][0]
 check("se detecta el dia incompleto", len(inc["incompletos"]), 1)
 check("dice que faltan 3 marcas", len(inc["dias"][0]["faltan"]), 3)
 check("sin salida no suma horas", inc["horas"], 0.0)
+check("y no queda como deuda", inc["por_pagar"], 0)
 
 print("\n" + ("TODO OK" if not fallas else "%d FALLAS: %s" % (len(fallas), fallas)))
 sys.exit(1 if fallas else 0)

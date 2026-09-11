@@ -45,8 +45,14 @@ dia(carlos, f(3), "08:30", "12:00", "13:00", "16:30")
 dia(carlos, f(2), "08:30", "12:00", None, None)              # dia incompleto
 dia(carlos, f(1), "08:30", "13:30", "14:30", "20:30")
 
+d.guardar_config({"horas_contrato": "7", "modo_extra": "fijo",
+                  "valor_extra_global": "3900"})
+# Algunos dias ya pagados, para que se vea el check.
+for n in (6, 5, 4):
+    d.marcar_pagado(juan, f(n))
+d.marcar_pagado(ana, f(3))
+
 d.guardar_config({"negocio": "Carniceria El Buen Corte", "ciudad": "Loncoche",
                   "horas_contrato": "7", "umbral_semanal": "42",
-                  "dia_cierre": "5", "modo_extra": "fijo",
-                  "valor_extra_global": "3900"})
+                  "modo_extra": "fijo", "valor_extra_global": "3900"})
 print("sembradas %d marcas en %d dias" % (d.total_marcas(), d.total_jornadas()))

@@ -28,7 +28,10 @@ jobs:
           pip install -r escritorio/requisitos.txt pyinstaller==6.11.1
 
       - name: Probar los calculos
-        run: python escritorio/probar_nucleo.py
+        run: |
+          python escritorio/probar_nucleo.py
+          python escritorio/probar_marcas.py
+          python escritorio/probar_pagos.py
 
       - name: Comprobar que la ventana se puede construir en Windows
         run: python escritorio/probar_ventana.py
@@ -165,8 +168,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.0
-          name: Control de Horas 1.3.0
+          tag_name: v1.4.0
+          name: Control de Horas 1.4.0
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -197,16 +200,20 @@ jobs:
             (por defecto el sabado), asi que el total que muestra es justo lo que
             hay que pagar. Sin calculadora.
 
-            ### Novedades de la 1.3.0
+            ### Novedades de la 1.4.0
 
-            - La hora se puede escribir corta: **830** queda como 08:30 y **1930**
-              como 19:30, sin tener que poner los dos puntos.
-            - La calculadora del valor hora quedo junto al campo que llena, con un
-              boton "No lo sabes?", en vez de estar perdida mas abajo.
-            - Aviso si el valor hora parece un sueldo mensual mal puesto, que es un
-              error que sale caro y que nadie nota hasta que paga.
-            - La ventana usa mas elementos del logo del local: las chairas cruzadas,
-              el borde ondulado de la insignia y las cintas con estrella.
+            - Las horas se ven como reloj: 10:42, no "10,70" (que se leia como
+              diez horas con setenta).
+            - Nueva pestana **Dias trabajados**: por cada dia, a quien, cuantas
+              horas, cuantas normales, cuantas extra y cuanto pagar. Nada mas.
+            - **Check de pagado** en cada dia. Un dia pagado queda con su monto
+              fijo y no se puede corregir sin quitarle el check antes.
+            - Nueva pestana **Pagos por persona**: dias trabajados, cuantos se le
+              pagaron, cuanto se le ha pagado y cuanto se le debe, con el detalle
+              de cada dia para quien cobra a fin de mes. Un boton paga todo lo
+              pendiente de una vez.
+            - Fuera lo que sobraba: las columnas de marcas y de desglose en
+              pesos, y la semana con dia de pago.
 
             ---
 
