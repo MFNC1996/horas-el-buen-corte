@@ -163,12 +163,12 @@ check("10,7 h se ven como 10:42, no con decimales", vals[3] == "10:42")
 check("7:00 normales", vals[4] == "7:00")
 check("3:42 de extra", vals[5] == "3:42")
 check("dice cuanto pagar", vals[6].startswith("$"))
-check("parte sin pagar", "☐" in vals[0])
+check("parte con '☐ Pagar'", "Pagar" in vals[0])
 check("la fila no trae columnas de mas", len(vals) == 7)
 
 v.cambiar_pagado(fila)
 check("el clic lo deja pagado", v.datos.pago_de(uno, "2026-09-07") is not None)
-check("y se ve el check", "☑" in str(v.tv_j.item(fila)["values"][0]))
+check("y dice 'Pagado'", "Pagado" in str(v.tv_j.item(fila)["values"][0]))
 
 avisos = []
 mb.showinfo = lambda *a, **k: avisos.append(a)
@@ -200,6 +200,14 @@ check("muestra de entrada los dias de la primera persona", len(v.tv_d.get_childr
 v.tv_r.selection_set(str(uno)); v.recargar_detalle()
 check("muestra los dias de esa persona", len(v.tv_d.get_children()) >= 1)
 check("ofrece pagar lo pendiente", "Pagar lo pendiente" in v.btn_pagar_todo.cget("text"))
+fila_d = "2026-09-07|%d" % uno
+check("el detalle trae el check", "Pagar" in str(v.tv_d.item(fila_d)["values"][0]))
+v.cambiar_pagado(fila_d)
+check("se puede pagar un dia desde el detalle", v.datos.pago_de(uno, "2026-09-07") is not None)
+check("y el detalle lo muestra pagado", "Pagado" in str(v.tv_d.item(fila_d)["values"][0]))
+mb.askyesno = lambda *a, **k: True
+v.cambiar_pagado(fila_d)
+mb.askyesno = lambda *a, **k: False
 mb.askyesno = lambda *a, **k: True
 v.pagar_todo()
 mb.askyesno = lambda *a, **k: False

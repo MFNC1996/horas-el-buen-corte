@@ -279,21 +279,21 @@ class App(tk.Tk):
                         command=self.recargar_jornadas).pack(side="left")
 
         tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
-                 text="Haz clic en el cuadrado de la izquierda para marcar el dia como "
-                      "pagado.   Doble clic en la fila para corregir las horas."
+                 text="Para marcar un dia como pagado, haz clic en  ☐ Pagar.   "
+                      "Para corregir las horas, doble clic en la fila."
                  ).pack(fill="x", pady=(8, 4))
 
         cols = ("pagado", "fecha", "trab", "horas", "norm", "extra", "total")
         titulos = ["Pagado", "Fecha", "Trabajador", "Horas trabajadas",
                    "Horas normales", "Horas extra", "A PAGAR"]
-        anchos = [70, 128, 190, 124, 124, 110, 130]
+        anchos = [104, 118, 180, 118, 118, 100, 124]
         marco = ttk.Frame(p)
         marco.pack(fill="both", expand=True)
         self.tv_j = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse")
         for c, t, a in zip(cols, titulos, anchos):
             self.tv_j.heading(c, text=t)
             self.tv_j.column(c, width=a, minwidth=60, stretch=(c == "trab"),
-                             anchor="w" if c == "trab" else
+                             anchor="w" if c in ("trab", "pagado") else
                              ("e" if c == "total" else "center"))
         self.tv_j.tag_configure("falta", background=AMBAR_CLARO, foreground=AMBAR)
         self.tv_j.tag_configure("pagado", foreground=VERDE)
@@ -375,8 +375,9 @@ class App(tk.Tk):
                    command=lambda: self.exportar("pdf")).pack(side="right")
 
         tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
-                 text="Toca a una persona para ver abajo sus dias, cuales estan pagados "
-                      "y cuales no.").pack(fill="x", pady=(8, 0))
+                 text="Toca a una persona y abajo aparecen sus dias. Ahi mismo marcas "
+                      "cada dia con  ☐ Pagar, o todos juntos con el boton."
+                 ).pack(fill="x", pady=(8, 0))
         self.lbl_aviso_r = tk.Label(p, text="", bg=AMBAR_CLARO, fg=AMBAR,
                                     font=(FUENTE, 10, "bold"), anchor="w", padx=12, pady=6)
 
@@ -405,16 +406,17 @@ class App(tk.Tk):
                                          command=self.pagar_todo, state="disabled")
         self.btn_pagar_todo.pack(side="right")
 
-        cols = ("fecha", "horas", "norm", "extra", "valor", "estado")
-        titulos = ["Fecha", "Horas", "Normales", "Extra", "Valor del dia", "Estado"]
-        anchos = [130, 90, 90, 80, 120, 220]
+        cols = ("pagado", "fecha", "horas", "norm", "extra", "valor", "estado")
+        titulos = ["Pagado", "Fecha", "Horas", "Normales", "Extra", "Valor del dia",
+                   "Estado"]
+        anchos = [104, 118, 80, 86, 76, 116, 200]
         marco2 = ttk.Frame(p)
         marco2.pack(fill="both", expand=True)
         self.tv_d = ttk.Treeview(marco2, columns=cols, show="headings", selectmode="none")
         for c, t, a in zip(cols, titulos, anchos):
             self.tv_d.heading(c, text=t)
             self.tv_d.column(c, width=a, minwidth=60, stretch=(c == "estado"),
-                             anchor="w" if c == "estado" else
+                             anchor="w" if c in ("estado", "pagado") else
                              ("e" if c == "valor" else "center"))
         self.tv_d.tag_configure("pagado", foreground=VERDE)
         self.tv_d.tag_configure("falta", background=AMBAR_CLARO, foreground=AMBAR)
@@ -422,6 +424,18 @@ class App(tk.Tk):
         self.tv_d.configure(yscrollcommand=sb2.set)
         sb2.pack(side="right", fill="y")
         self.tv_d.pack(side="left", fill="both", expand=True)
+        self.tv_d.bind("<Button-1>", self._clic_en_detalle)
+
+    def _clic_en_detalle(self, evento):
+        """Mismo check de pagado que en Dias trabajados, en los dias de la persona."""
+        if self.tv_d.identify_region(evento.x, evento.y) != "cell":
+            return
+        if self.tv_d.identify_column(evento.x) != "#1":
+            return
+        fila = self.tv_d.identify_row(evento.y)
+        if fila:
+            self.cambiar_pagado(fila)
+            return "break"
 
     def _periodo_r(self):
         """(desde, hasta, titulo) del periodo elegido en Pagos por persona."""
@@ -814,10 +828,10 @@ class App(tk.Tk):
                 tags, marca = ("falta",), "  -"
                 a_pagar = "falta marcar"
             elif j["pagado"]:
-                tags, marca = ("pagado",), "  ☑"
+                tags, marca = ("pagado",), "  ☑  Pagado"
                 a_pagar = N.pesos(j["monto_pagado"])
             else:
-                tags, marca = (), "  ☐"
+                tags, marca = (), "  ☐  Pagar"
                 a_pagar = N.pesos(j["total"])
             self.tv_j.insert("", "end", iid=j["id"], tags=tags, values=(
                 marca,
@@ -875,16 +889,18 @@ class App(tk.Tk):
         self.lbl_det.config(text="Dias de %s" % fila["nombre"])
         for d in sorted(fila["dias"], key=lambda x: x["fecha"]):
             if not d["completa"]:
-                tags, estado = ("falta",), "falta marcar: " + ", ".join(
-                    x.lower() for x in d["faltan"])
+                tags, estado, marca = ("falta",), "falta marcar: " + ", ".join(
+                    x.lower() for x in d["faltan"]), "  -"
                 valor = "-"
             elif d["pagado"]:
-                tags, estado = ("pagado",), "pagado el %s-%s" % (
-                    d["pagado_en"][8:10], d["pagado_en"][5:7])
+                tags, estado, marca = ("pagado",), "pagado el %s-%s" % (
+                    d["pagado_en"][8:10], d["pagado_en"][5:7]), "  ☑  Pagado"
                 valor = N.pesos(d["monto_pagado"])
             else:
-                tags, estado, valor = (), "por pagar", N.pesos(d["total"])
-            self.tv_d.insert("", "end", tags=tags, values=(
+                tags, estado, valor, marca = (), "por pagar", N.pesos(d["total"]), \
+                    "  ☐  Pagar"
+            self.tv_d.insert("", "end", iid=d["id"], tags=tags, values=(
+                marca,
                 "%s %s" % (N.nombre_dia(d["fecha"])[:3], d["fecha"][8:10] + "-" +
                            d["fecha"][5:7]),
                 N.hhmm_txt(d["horas"]) if d["completa"] else "-",
