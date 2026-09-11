@@ -25,6 +25,15 @@ Add-Type -TypeDefinition $codigo
 
 New-Item -ItemType Directory -Force -Path $Destino | Out-Null
 
+# Primero la pantalla de carga: se alarga solo para poder fotografiarla.
+$env:CH_PRESENTACION_MS = "25000"
+$c = Start-Process -FilePath $Exe -PassThru
+Start-Sleep -Seconds 10
+Fotografiar "0-presentacion"
+Get-Process -Name ControlDeHoras -ErrorAction SilentlyContinue | Stop-Process -Force
+Remove-Item Env:\CH_PRESENTACION_MS
+Start-Sleep -Seconds 4
+
 $p = Start-Process -FilePath $Exe -PassThru
 Start-Sleep -Seconds 15
 if ($p.HasExited) {

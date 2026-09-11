@@ -29,8 +29,28 @@ def check(nombre, cond):
     if not cond:
         fallas.append(nombre)
 
-v = app.App()
+v = app.App(presentacion=False)
 v.withdraw()
+
+print("--- pantalla de carga ---")
+carga = app.Presentacion(v)
+textos = [w.cget("text") for w in carga.winfo_children() if isinstance(w, app.tk.Label)]
+check("dice 'Carniceria El Buen Corte'", "Carniceria El Buen Corte" in textos)
+check("muestra el logo", carga._logo is not None)
+check("dice by Macoem", any("by Macoem" in t for t in textos))
+carga.paso("Abriendo la base de datos...", 40)
+check("avanza la barra", float(carga.barra["value"]) == 40)
+check("cambia el mensaje", carga.lbl.cget("text") == "Abriendo la base de datos...")
+listo = []
+carga.terminar(300, lambda: listo.append(True))
+import time
+fin = time.time() + 5
+while not listo and time.time() < fin:
+    v.update(); time.sleep(0.02)
+check("al terminar abre la aplicacion", listo == [True])
+check("la barra llega al final", float(carga.barra["value"]) == 100)
+carga.destroy()
+print()
 
 print("--- pestanas ---")
 pestanas = [v.tabs.tab(i, "text").strip() for i in range(v.tabs.index("end"))]

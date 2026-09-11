@@ -221,8 +221,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.5.0
-          name: Control de Horas 1.5.0
+          tag_name: v1.5.1
+          name: Control de Horas 1.5.1
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -253,7 +253,11 @@ jobs:
             (por defecto el sabado), asi que el total que muestra es justo lo que
             hay que pagar. Sin calculadora.
 
-            ### Novedades de la 1.5.0
+            ### Novedades de la 1.5.x
+
+            - Pantalla de carga al abrir: el logo al centro, "Carniceria El Buen
+              Corte" y una barra con lo que va cargando. Despues se abre la app.
+            - Arreglado: en el programa instalado, Exportar a PDF fallaba.
 
             - El logo del local en todo el sistema: en la cabecera de la ventana,
               como icono del programa (escritorio y barra de tareas), en el

@@ -32,7 +32,7 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 AUTOR = "Macoem"
 # El titulo tambien sirve para encontrar la ventana si ya esta abierta.
 TITULO = "Control de Horas  -  El Buen Corte   |   by %s" % AUTOR
@@ -41,15 +41,108 @@ FUENTE = "Segoe UI" if sys.platform.startswith("win") else "Helvetica"
 MONO = "Consolas" if sys.platform.startswith("win") else "Menlo"
 
 
+class Presentacion(tk.Toplevel):
+    """
+    Pantalla de carga: el logo al centro mientras se abre el programa.
+
+    Los mensajes son los pasos reales de la carga (abrir la base, revisar el
+    respaldo, armar las pantallas). Como todo eso tarda menos de un segundo, se
+    queda unos segundos mas para que alcance a verse, y despues se abre la
+    ventana.
+    """
+
+    ANCHO, ALTO = 460, 430
+
+    def __init__(self, raiz):
+        tk.Toplevel.__init__(self, raiz)
+        self.overrideredirect(True)                 # sin barra de titulo
+        self.configure(bg=BLANCO, highlightthickness=3, highlightbackground=VERDE)
+        x = (self.winfo_screenwidth() - self.ANCHO) // 2
+        y = (self.winfo_screenheight() - self.ALTO) // 2
+        self.geometry("%dx%d+%d+%d" % (self.ANCHO, self.ALTO, x, y))
+        self.attributes("-topmost", True)
+
+        self._logo = None
+        try:
+            import imagen_marca
+            self._logo = tk.PhotoImage(data=imagen_marca.PRESENTACION)
+            tk.Label(self, image=self._logo, bg=BLANCO).pack(pady=(26, 10))
+        except Exception:
+            tk.Frame(self, bg=BLANCO, height=60).pack()
+        tk.Label(self, text="Carniceria El Buen Corte", bg=BLANCO, fg=ROJO,
+                 font=(FUENTE, 17, "bold")).pack()
+        tk.Label(self, text="LONCOCHE  ·  CONTROL DE HORAS", bg=BLANCO, fg=SUAVE,
+                 font=(FUENTE, 8, "bold")).pack(pady=(2, 18))
+
+        estilo = ttk.Style(self)
+        try:
+            estilo.theme_use("clam")
+        except tk.TclError:
+            pass
+        estilo.configure("Carga.Horizontal.TProgressbar", troughcolor=PAPEL,
+                         background=ROJO, bordercolor=LINEA, lightcolor=ROJO,
+                         darkcolor=ROJO, thickness=8)
+        self.barra = ttk.Progressbar(self, style="Carga.Horizontal.TProgressbar",
+                                     length=320, maximum=100, mode="determinate")
+        self.barra.pack()
+        self.lbl = tk.Label(self, text="Iniciando...", bg=BLANCO, fg=SUAVE,
+                            font=(FUENTE, 9))
+        self.lbl.pack(pady=(8, 0))
+        tk.Label(self, text="v%s   ·   by %s" % (VERSION, AUTOR), bg=BLANCO, fg=SUAVE,
+                 font=(FUENTE, 8, "italic")).pack(side="bottom", pady=(0, 12))
+        self.lift()
+        self.update()
+
+    def paso(self, texto, avance):
+        self.lbl.config(text=texto)
+        self.barra["value"] = avance
+        self.update()
+
+    def terminar(self, restante_ms, al_final):
+        """Completa la barra de a poco durante el tiempo que falta y cierra."""
+        mensajes = ["Cargando recursos...", "Preparando el reloj...", "Listo"]
+        inicio = float(self.barra["value"])
+        pasos = max(1, int(restante_ms / 40))
+
+        def avanzar(i=0):
+            if not self.winfo_exists():
+                return
+            fraccion = float(i) / pasos
+            self.barra["value"] = inicio + (100 - inicio) * fraccion
+            self.lbl.config(text=mensajes[min(len(mensajes) - 1,
+                                              int(fraccion * len(mensajes)))])
+            if i < pasos:
+                self.after(40, avanzar, i + 1)
+            else:
+                self.after(250, al_final)
+        avanzar()
+
+
 class App(tk.Tk):
-    def __init__(self):
+    def __init__(self, presentacion=True):
         tk.Tk.__init__(self)
+        empezo = datetime.now()
+        carga = None
+        if presentacion:
+            self.withdraw()                     # la ventana se arma escondida
+            try:
+                carga = Presentacion(self)
+            except Exception:
+                carga = None                    # sin pantalla de carga, igual abre
+
+        def paso(texto, avance):
+            if carga is not None:
+                carga.paso(texto, avance)
+
+        paso("Abriendo la base de datos...", 12)
         self.datos = N.Datos()
         primera = self.datos.sembrar_si_vacia()
+        paso("Revisando el respaldo del dia...", 28)
         try:
             self.datos.respaldar()
         except Exception:
             pass
+        paso("Preparando las pantallas...", 45)
 
         self.title(TITULO)
         ancho = min(1120, self.winfo_screenwidth() - 60)
@@ -80,13 +173,29 @@ class App(tk.Tk):
         self._tab_trabajadores()
         self._tab_config()
 
+        paso("Cargando trabajadores y dias...", 62)
         self.recargar_todo()
         self._latido()
-        if primera:
-            self.after(400, lambda: messagebox.showinfo(
-                "Primer uso",
-                "Cree tres trabajadores de ejemplo.\n\nAnda a la pestana "
-                "Trabajadores para ponerles el nombre real y el valor de la hora."))
+
+        def mostrar():
+            if carga is not None and carga.winfo_exists():
+                carga.destroy()
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+            if primera:
+                self.after(400, lambda: messagebox.showinfo(
+                    "Primer uso",
+                    "Cree tres trabajadores de ejemplo.\n\nAnda a la pestana "
+                    "Trabajadores para ponerles el nombre real y el valor de la hora."))
+
+        if carga is None:
+            mostrar()                           # nunca dejar la ventana escondida
+            return
+        # Unos segundos en total, para que la pantalla de carga alcance a verse.
+        minimo = int(os.environ.get("CH_PRESENTACION_MS", "3000"))
+        usado = int((datetime.now() - empezo).total_seconds() * 1000)
+        carga.terminar(max(300, minimo - usado), mostrar)
 
     # ------------------------------------------------------------ apariencia
     def _estilos(self):

@@ -118,6 +118,7 @@ def main():
         f.write('"""Logo del local, en base64. Generado por '
                 'empaquetado/preparar_logo.py; no editar a mano."""\n\n')
         for nombre, datos in (("CABECERA", png(achicar(logo, 62))),
+                              ("PRESENTACION", png(achicar(logo, 200))),
                               ("ICONO", png(achicar(logo, 64))),
                               ("PDF_JPEG", jpeg(sobre_blanco(logo, 300)))):
             f.write('%s = """%s"""\n\n' % (nombre, base64.b64encode(datos).decode()))
