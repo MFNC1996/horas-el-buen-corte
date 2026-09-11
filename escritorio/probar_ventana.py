@@ -50,6 +50,11 @@ check("hay 3 trabajadores de ejemplo", len(v.datos.trabajadores()) == 3)
 check("'by Macoem' en la cabecera", v.lbl_autor.cget("text") == "by Macoem")
 check("'by Macoem' en la barra de titulo", "by Macoem" in v.title())
 
+print("\n--- una sola ventana a la vez ---")
+import instancia
+check("la primera toma el candado", instancia.tomar(tempfile.mkdtemp()) is True)
+check("una segunda ya no puede", instancia.tomar(tempfile.mkdtemp()) is False)
+
 print("\n--- sin nadie elegido no se puede marcar ---")
 check("el boton parte apagado", str(v.btn_marcar.cget("state")) == "disabled")
 check("pide elegir nombre", "Elige tu nombre" in v.lbl_quien.cget("text"))

@@ -46,6 +46,42 @@ jobs:
         shell: pwsh
         run: escritorio/empaquetado/capturar.ps1
 
+      - name: Abrir el programa dos veces no abre dos ventanas
+        shell: pwsh
+        run: |
+          function Contar { @(Get-Process -Name ControlDeHoras -ErrorAction SilentlyContinue).Count }
+
+          $primero = Start-Process -FilePath "dist\ControlDeHoras.exe" -PassThru
+          Start-Sleep -Seconds 15
+          $antes = Contar
+          Write-Host "Con una ventana abierta hay $antes procesos (lanzador + programa)."
+
+          $segundo = Start-Process -FilePath "dist\ControlDeHoras.exe" -PassThru
+          Start-Sleep -Seconds 15
+          $despues = Contar
+          Write-Host "Despues del segundo doble clic hay $despues procesos."
+
+          if (-not $segundo.HasExited) {
+            Write-Error "El segundo intento sigue abierto: se abrio otra ventana."; exit 1
+          }
+          if ($despues -ne $antes) {
+            Write-Error "Se abrio una segunda instancia ($antes -> $despues procesos)."; exit 1
+          }
+          Write-Host "Bien: el segundo doble clic no abrio otra ventana."
+
+          # Cerrando el programa, se tiene que poder abrir de nuevo: el
+          # candado no queda trabado aunque se cierre a la fuerza.
+          Get-Process -Name ControlDeHoras -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 4
+          $otra_vez = Start-Process -FilePath "dist\ControlDeHoras.exe" -PassThru
+          Start-Sleep -Seconds 15
+          if ((Contar) -eq 0) {
+            Write-Error "Despues de cerrarlo a la fuerza no se pudo volver a abrir."; exit 1
+          }
+          Write-Host "Bien: cerrado a la fuerza, se puede volver a abrir."
+          Get-Process -Name ControlDeHoras -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 3
+
       - name: Preparar el LEEME
         shell: pwsh
         run: Copy-Item escritorio/LEEME.txt LEEME.txt
@@ -168,8 +204,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4.1
-          name: Control de Horas 1.4.1
+          tag_name: v1.4.2
+          name: Control de Horas 1.4.2
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -203,6 +239,8 @@ jobs:
             ### Novedades de la 1.4.x
 
             - "by Macoem" a la vista, en la cabecera y en la barra de titulo.
+            - Una sola ventana a la vez: si el programa ya esta abierto, un segundo
+              doble clic trae al frente el que ya estaba en vez de abrir otro.
 
             - Las horas se ven como reloj: 10:42, no "10,70" (que se leia como
               diez horas con setenta).

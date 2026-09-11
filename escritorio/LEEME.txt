@@ -67,6 +67,12 @@ COMO SE USA
    listo para imprimir.
 
 
+UNA SOLA VENTANA
+----------------
+El programa se abre una sola vez. Si ya esta abierto y le das doble clic
+de nuevo, no se abre otro: aparece adelante el que ya estaba.
+
+
 DONDE QUEDAN LOS DATOS
 ----------------------
 En tu carpeta de usuario, no dentro del programa:
@@ -87,6 +93,6 @@ para liquidaciones de sueldo.
 
 
 ---------------------------------------------------
-Control de Horas  v1.4.0
+Control de Horas  v1.4.2
 Desarrollado por Macoem
 https://github.com/MFNC1996/horas-el-buen-corte

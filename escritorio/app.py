@@ -17,6 +17,7 @@ from tkinter import ttk, messagebox, filedialog
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nucleo as N
+import instancia
 
 # Paleta del logo del local
 ROJO = "#B4141F"
@@ -31,8 +32,10 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.4.1"
+VERSION = "1.4.2"
 AUTOR = "Macoem"
+# El titulo tambien sirve para encontrar la ventana si ya esta abierta.
+TITULO = "Control de Horas  -  El Buen Corte   |   by %s" % AUTOR
 
 FUENTE = "Segoe UI" if sys.platform.startswith("win") else "Helvetica"
 MONO = "Consolas" if sys.platform.startswith("win") else "Menlo"
@@ -48,7 +51,7 @@ class App(tk.Tk):
         except Exception:
             pass
 
-        self.title("Control de Horas  -  El Buen Corte   |   by %s" % AUTOR)
+        self.title(TITULO)
         ancho = min(1120, self.winfo_screenwidth() - 60)
         alto = min(720, self.winfo_screenheight() - 110)
         self.geometry("%dx%d+%d+%d" % (
@@ -1168,6 +1171,16 @@ class EditorMarcas(tk.Toplevel):
 
 
 def main():
+    # Antes de abrir nada: si ya hay una ventana, se trae esa y no se abre otra.
+    if not instancia.tomar(N.carpeta_datos()):
+        if not instancia.traer_al_frente(TITULO):
+            raiz = tk.Tk()
+            raiz.withdraw()
+            messagebox.showinfo("Control de Horas",
+                                "El programa ya esta abierto.\n\n"
+                                "Buscalo en la barra de tareas, abajo.")
+            raiz.destroy()
+        return 0
     try:
         App().mainloop()
     except Exception:
