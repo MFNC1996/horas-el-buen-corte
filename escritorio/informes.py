@@ -83,14 +83,6 @@ def a_excel(r, ruta):
                 c.number_format = '"$"#,##0'
             if i == 6 and f["por_pagar"]:
                 c.font = Font(bold=True, color=ROJO)
-    fila += 1
-    t = r["totales"]
-    for i, v in enumerate(["TOTAL", t["turnos"], t["dias_pagados"], t["pagado"],
-                           t["dias_pendientes"], t["por_pagar"]], start=1):
-        c = h.cell(row=fila, column=i, value=v)
-        c.font = cab; c.fill = relleno; c.border = borde
-        if i in (4, 6):
-            c.number_format = '"$"#,##0'
     fila += 2
     for linea in _notas(r):
         h.cell(row=fila, column=1, value=linea).font = Font(size=9, color="6C625C")
@@ -166,9 +158,6 @@ def a_pdf(r, ruta):
     for f in r["filas"]:
         datos.append([f["nombre"], str(f["turnos"]), str(f["dias_pagados"]),
                       pesos(f["pagado"]), str(f["dias_pendientes"]), pesos(f["por_pagar"])])
-    t = r["totales"]
-    datos.append(["TOTAL", str(t["turnos"]), str(t["dias_pagados"]), pesos(t["pagado"]),
-                  str(t["dias_pendientes"]), pesos(t["por_pagar"])])
     tabla = Table(datos, colWidths=[52 * mm, 23 * mm, 22 * mm, 28 * mm, 22 * mm, 28 * mm],
                   repeatRows=1)
     tabla.hAlign = "LEFT"
@@ -177,8 +166,6 @@ def a_pdf(r, ruta):
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 8.5),
         ("ALIGN", (1, 0), (-1, -1), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D5CFC9")),
-        ("BACKGROUND", (0, -1), (-1, -1), tinta), ("TEXTCOLOR", (0, -1), (-1, -1), colors.white),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
         ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]
     for i, f in enumerate(r["filas"], start=1):

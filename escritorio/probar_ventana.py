@@ -37,7 +37,7 @@ check("Marcar es la primera", pestanas[0] == "Marcar")
 print("\n--- controles ---")
 for nombre in ("caja_nombres", "lbl_quien", "lbl_marca", "btn_marcar", "lbl_hoy",
                "tv_j", "tv_r", "tv_d", "tv_t", "e_contrato", "btn_pagar_todo",
-               "e_recargo", "e_vextra", "lbl_total_j", "lbl_calc",
+               "e_recargo", "e_vextra", "lbl_calc",
                "e_negocio", "lbl_reloj"):
     check("existe %s" % nombre, hasattr(v, nombre))
 check("hay 3 trabajadores de ejemplo", len(v.datos.trabajadores()) == 3)
@@ -169,7 +169,6 @@ check("la fila no trae columnas de mas", len(vals) == 7)
 v.cambiar_pagado(fila)
 check("el clic lo deja pagado", v.datos.pago_de(uno, "2026-09-07") is not None)
 check("y se ve el check", "☑" in str(v.tv_j.item(fila)["values"][0]))
-check("abajo lo suma como ya pagado", "Ya pagado:" in v.lbl_total_j.cget("text"))
 
 avisos = []
 mb.showinfo = lambda *a, **k: avisos.append(a)
@@ -195,7 +194,9 @@ check("un dia incompleto no se deja pagar", bool(avisos) and "faltan marcas" in 
 
 print("\n--- pagos por persona ---")
 v.cb_mes_r.set("Todo"); v.recargar_resumen()
-check("una fila por persona y el total", len(v.tv_r.get_children()) >= 2)
+check("una fila por persona, sin fila de total",
+      "total" not in v.tv_r.get_children() and len(v.tv_r.get_children()) >= 1)
+check("muestra de entrada los dias de la primera persona", len(v.tv_d.get_children()) >= 1)
 v.tv_r.selection_set(str(uno)); v.recargar_detalle()
 check("muestra los dias de esa persona", len(v.tv_d.get_children()) >= 1)
 check("ofrece pagar lo pendiente", "Pagar lo pendiente" in v.btn_pagar_todo.cget("text"))

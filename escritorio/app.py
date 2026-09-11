@@ -282,9 +282,6 @@ class App(tk.Tk):
                  text="Haz clic en el cuadrado de la izquierda para marcar el dia como "
                       "pagado.   Doble clic en la fila para corregir las horas."
                  ).pack(fill="x", pady=(8, 4))
-        self.lbl_total_j = tk.Label(p, text="", bg=PAPEL, fg=TINTA,
-                                    font=(FUENTE, 12, "bold"), anchor="e")
-        self.lbl_total_j.pack(side="bottom", fill="x", pady=(8, 0))
 
         cols = ("pagado", "fecha", "trab", "horas", "norm", "extra", "total")
         titulos = ["Pagado", "Fecha", "Trabajador", "Horas trabajadas",
@@ -377,6 +374,9 @@ class App(tk.Tk):
         ttk.Button(barra, text="Exportar a PDF",
                    command=lambda: self.exportar("pdf")).pack(side="right")
 
+        tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
+                 text="Toca a una persona para ver abajo sus dias, cuales estan pagados "
+                      "y cuales no.").pack(fill="x", pady=(8, 0))
         self.lbl_aviso_r = tk.Label(p, text="", bg=AMBAR_CLARO, fg=AMBAR,
                                     font=(FUENTE, 10, "bold"), anchor="w", padx=12, pady=6)
 
@@ -392,7 +392,6 @@ class App(tk.Tk):
             self.tv_r.heading(c, text=t)
             self.tv_r.column(c, width=a, minwidth=60, stretch=(c == "trab"),
                              anchor="w" if c == "trab" else "e")
-        self.tv_r.tag_configure("total", font=(FUENTE, 10, "bold"), background="#E6E1DC")
         self.tv_r.pack(fill="x")
         self.tv_r.bind("<<TreeviewSelect>>", lambda e: self.recargar_detalle())
 
@@ -437,7 +436,7 @@ class App(tk.Tk):
 
     def pagar_todo(self):
         sel = self.tv_r.selection()
-        if not sel or sel[0] == "total":
+        if not sel:
             return
         tid = int(sel[0])
         desde, hasta, titulo = self._periodo_r()
@@ -810,7 +809,6 @@ class App(tk.Tk):
             dias = [d for d in dias if not d["pagado"]]
         dias.sort(key=lambda x: (x["fecha"], x["nombre"]), reverse=True)
 
-        por_pagar = pagado = 0
         for j in dias:
             if not j["completa"]:
                 tags, marca = ("falta",), "  -"
@@ -818,11 +816,9 @@ class App(tk.Tk):
             elif j["pagado"]:
                 tags, marca = ("pagado",), "  ☑"
                 a_pagar = N.pesos(j["monto_pagado"])
-                pagado += j["monto_pagado"]
             else:
                 tags, marca = (), "  ☐"
                 a_pagar = N.pesos(j["total"])
-                por_pagar += j["total"]
             self.tv_j.insert("", "end", iid=j["id"], tags=tags, values=(
                 marca,
                 "%s %s" % (N.nombre_dia(j["fecha"])[:3], j["fecha"][8:10] + "-" +
@@ -832,9 +828,7 @@ class App(tk.Tk):
                 N.hhmm_txt(j["normales"]) if j["completa"] else "-",
                 N.hhmm_txt(j["extra"]) if j["extra"] else "-",
                 a_pagar))
-        self.lbl_total_j.config(
-            text="Falta pagar:  %s        Ya pagado:  %s"
-                 % (N.pesos(por_pagar), N.pesos(pagado)))
+
 
     def recargar_resumen(self):
         elegido = self.tv_r.selection()
@@ -849,10 +843,6 @@ class App(tk.Tk):
             self.tv_r.insert("", "end", iid=str(f["id"]), values=(
                 f["nombre"], f["turnos"], f["dias_pagados"], N.pesos(f["pagado"]),
                 f["dias_pendientes"], N.pesos(f["por_pagar"])))
-        t = r["totales"]
-        self.tv_r.insert("", "end", iid="total", tags=("total",), values=(
-            "TOTAL", t["turnos"], t["dias_pagados"], N.pesos(t["pagado"]),
-            t["dias_pendientes"], N.pesos(t["por_pagar"])))
 
         n, plata = N.pendiente_fuera(self.datos, desde, hasta)
         if n:
@@ -863,7 +853,7 @@ class App(tk.Tk):
         else:
             self.lbl_aviso_r.pack_forget()
 
-        if elegido and self.tv_r.exists(elegido[0]) and elegido[0] != "total":
+        if elegido and self.tv_r.exists(elegido[0]):
             self.tv_r.selection_set(elegido[0])
         elif r["filas"]:
             self.tv_r.selection_set(str(r["filas"][0]["id"]))
@@ -874,7 +864,7 @@ class App(tk.Tk):
         for f in self.tv_d.get_children():
             self.tv_d.delete(f)
         sel = self.tv_r.selection()
-        if not sel or sel[0] == "total":
+        if not sel:
             self.lbl_det.config(text="Elige a una persona para ver sus dias")
             self.btn_pagar_todo.config(state="disabled", text="Pagar todo lo pendiente")
             return
