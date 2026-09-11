@@ -31,7 +31,7 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 AUTOR = "Macoem"
 
 FUENTE = "Segoe UI" if sys.platform.startswith("win") else "Helvetica"
@@ -48,7 +48,7 @@ class App(tk.Tk):
         except Exception:
             pass
 
-        self.title("Control de Horas  -  El Buen Corte")
+        self.title("Control de Horas  -  El Buen Corte   |   by %s" % AUTOR)
         ancho = min(1120, self.winfo_screenwidth() - 60)
         alto = min(720, self.winfo_screenheight() - 110)
         self.geometry("%dx%d+%d+%d" % (
@@ -132,9 +132,14 @@ class App(tk.Tk):
                  font=(FUENTE, 19, "bold italic")).pack(anchor="w")
         tk.Label(cont, text="LONCOCHE  ·  CONTROL DE HORAS", bg=BLANCO, fg=SUAVE,
                  font=(FUENTE, 8, "bold")).pack(anchor="w", pady=(2, 0))
-        self.lbl_reloj = tk.Label(barra, text="", bg=BLANCO, fg=TINTA,
+        derecha = tk.Frame(barra, bg=BLANCO)
+        derecha.pack(side="right", padx=22)
+        self.lbl_reloj = tk.Label(derecha, text="", bg=BLANCO, fg=TINTA,
                                   font=(MONO, 22, "bold"))
-        self.lbl_reloj.pack(side="right", padx=22)
+        self.lbl_reloj.pack(anchor="e")
+        self.lbl_autor = tk.Label(derecha, text="by %s" % AUTOR, bg=BLANCO, fg=ROJO,
+                                  font=(FUENTE, 9, "bold italic"))
+        self.lbl_autor.pack(anchor="e")
         tk.Frame(self, bg=VERDE, height=3).pack(fill="x")
 
     def _latido(self):

@@ -47,6 +47,8 @@ for nombre in ("caja_nombres", "lbl_quien", "lbl_marca", "btn_marcar", "lbl_hoy"
                "e_negocio", "lbl_reloj"):
     check("existe %s" % nombre, hasattr(v, nombre))
 check("hay 3 trabajadores de ejemplo", len(v.datos.trabajadores()) == 3)
+check("'by Macoem' en la cabecera", v.lbl_autor.cget("text") == "by Macoem")
+check("'by Macoem' en la barra de titulo", "by Macoem" in v.title())
 
 print("\n--- sin nadie elegido no se puede marcar ---")
 check("el boton parte apagado", str(v.btn_marcar.cget("state")) == "disabled")

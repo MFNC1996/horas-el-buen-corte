@@ -168,8 +168,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4.0
-          name: Control de Horas 1.4.0
+          tag_name: v1.4.1
+          name: Control de Horas 1.4.1
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -200,7 +200,9 @@ jobs:
             (por defecto el sabado), asi que el total que muestra es justo lo que
             hay que pagar. Sin calculadora.
 
-            ### Novedades de la 1.4.0
+            ### Novedades de la 1.4.x
+
+            - "by Macoem" a la vista, en la cabecera y en la barra de titulo.
 
             - Las horas se ven como reloj: 10:42, no "10,70" (que se leia como
               diez horas con setenta).
