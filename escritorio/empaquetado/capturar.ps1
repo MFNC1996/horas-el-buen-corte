@@ -25,6 +25,18 @@ Add-Type -TypeDefinition $codigo
 
 New-Item -ItemType Directory -Force -Path $Destino | Out-Null
 
+function Fotografiar($nombre) {
+    $a = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width
+    $h = [System.Windows.Forms.SystemInformation]::VirtualScreen.Height
+    $bmp = New-Object System.Drawing.Bitmap $a, $h
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.CopyFromScreen(0, 0, 0, 0, $bmp.Size)
+    $bmp.Save("$PWD\$Destino\$nombre.png",
+              [System.Drawing.Imaging.ImageFormat]::Png)
+    $g.Dispose(); $bmp.Dispose()
+    Write-Host "  capturada: $nombre"
+}
+
 # Primero la pantalla de carga: se alarga solo para poder fotografiarla.
 $env:CH_PRESENTACION_MS = "25000"
 $c = Start-Process -FilePath $Exe -PassThru
@@ -42,17 +54,7 @@ if ($p.HasExited) {
 }
 Write-Host "La app siguio abierta 15 segundos: arranca bien."
 
-function Fotografiar($nombre) {
-    $a = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width
-    $h = [System.Windows.Forms.SystemInformation]::VirtualScreen.Height
-    $bmp = New-Object System.Drawing.Bitmap $a, $h
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen(0, 0, 0, 0, $bmp.Size)
-    $bmp.Save("$PWD\$Destino\$nombre.png",
-              [System.Drawing.Imaging.ImageFormat]::Png)
-    $g.Dispose(); $bmp.Dispose()
-    Write-Host "  capturada: $nombre"
-}
+
 
 # La ventana se centra sola y su tamano sale del de la pantalla, asi que la
 # primera pestana y el primer nombre estan siempre en el mismo lugar. Para las
