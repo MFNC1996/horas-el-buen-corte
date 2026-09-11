@@ -32,7 +32,7 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.4.3"
+VERSION = "1.5.0"
 AUTOR = "Macoem"
 # El titulo tambien sirve para encontrar la ventana si ya esta abierta.
 TITULO = "Control de Horas  -  El Buen Corte   |   by %s" % AUTOR
@@ -59,6 +59,13 @@ class App(tk.Tk):
             max(0, (self.winfo_screenheight() - alto) // 3)))
         self.minsize(min(900, ancho), min(560, alto))
         self.configure(bg=PAPEL)
+        # Icono de la ventana y de la barra de tareas: el logo, no la pluma de Tk.
+        try:
+            import imagen_marca
+            self._icono = tk.PhotoImage(data=imagen_marca.ICONO)
+            self.iconphoto(True, self._icono)
+        except Exception:
+            pass
 
         self.sel_trab = None          # trabajador elegido en la pantalla de marcar
 
@@ -119,13 +126,13 @@ class App(tk.Tk):
         barra.pack(fill="x", side="top")
         barra.pack_propagate(False)
 
-        # Las chairas cruzadas del logo del local.
+        # El logo del local.
         self.img_marca = None
         try:
             import imagen_marca
             self.img_marca = tk.PhotoImage(data=imagen_marca.CABECERA)
             tk.Label(barra, image=self.img_marca, bg=BLANCO).pack(
-                side="left", padx=(16, 0), pady=8)
+                side="left", padx=(16, 0), pady=6)
         except Exception:
             pass                      # sin la imagen la ventana igual sirve
 
@@ -1208,7 +1215,39 @@ class EditorMarcas(tk.Toplevel):
         self.destroy()
 
 
+def probar_informes(carpeta):
+    """
+    Genera los dos informes con datos de ejemplo, sin abrir la ventana, en una
+    base temporal (no toca los datos reales). Sirve para comprobar que el
+    programa YA EMPAQUETADO puede exportar: ahi faltan cosas que desde el codigo
+    fuente no se notan. Sale con 0 si los dos quedaron bien.
+    """
+    import tempfile
+    import informes
+    d = N.Datos(os.path.join(tempfile.mkdtemp(), "prueba.sqlite3"))
+    d.guardar_config({"horas_contrato": "7", "modo_extra": "fijo",
+                      "valor_extra_global": "3900"})
+    t = d.agregar_trabajador("Prueba", 3075)
+    for tipo, h in (("entrada", "08:30"), ("colacion_inicio", "13:30"),
+                    ("colacion_fin", "14:30"), ("salida", "19:30")):
+        d.agregar_marca(t, "2026-09-08", tipo, h)
+    d.marcar_pagado(t, "2026-09-08")
+    r = N.resumen_mensual(d, 2026, 9)
+    os.makedirs(carpeta, exist_ok=True)
+    x = informes.a_excel(r, os.path.join(carpeta, "prueba.xlsx"))
+    p = informes.a_pdf(r, os.path.join(carpeta, "prueba.pdf"))
+    return 0 if os.path.getsize(x) > 4000 and os.path.getsize(p) > 2000 else 1
+
+
 def main():
+    if len(sys.argv) >= 3 and sys.argv[1] == "--probar-informes":
+        try:
+            return probar_informes(sys.argv[2])
+        except Exception:
+            with open(os.path.join(sys.argv[2], "error.txt"), "w") as f:
+                f.write(traceback.format_exc())
+            return 1
+
     # Antes de abrir nada: si ya hay una ventana, se trae esa y no se abre otra.
     if not instancia.tomar(N.carpeta_datos()):
         if not instancia.traer_al_frente(TITULO):

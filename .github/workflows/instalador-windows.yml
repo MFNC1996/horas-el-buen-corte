@@ -46,6 +46,23 @@ jobs:
         shell: pwsh
         run: escritorio/empaquetado/capturar.ps1
 
+      - name: El programa empaquetado puede exportar a Excel y PDF
+        shell: pwsh
+        run: |
+          # Desde el codigo fuente todo anda, pero dentro del .exe pueden faltar
+          # librerias. Asi se descubrio que el PDF fallaba sin Pillow.
+          $carpeta = "$PWD\prueba-informes"
+          $p = Start-Process -FilePath "dist\ControlDeHoras.exe" `
+               -ArgumentList "--probar-informes", "`"$carpeta`"" -Wait -PassThru
+          if (Test-Path "$carpeta\error.txt") { Get-Content "$carpeta\error.txt" }
+          if ($p.ExitCode -ne 0) {
+            Write-Error "El programa empaquetado no pudo generar los informes."; exit 1
+          }
+          Get-ChildItem $carpeta | ForEach-Object {
+            Write-Host ("  {0}: {1:N0} bytes" -f $_.Name, $_.Length)
+          }
+          Write-Host "Bien: el .exe genera el Excel y el PDF."
+
       - name: Abrir el programa dos veces no abre dos ventanas
         shell: pwsh
         run: |
@@ -204,8 +221,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4.3
-          name: Control de Horas 1.4.3
+          tag_name: v1.5.0
+          name: Control de Horas 1.5.0
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -235,6 +252,12 @@ jobs:
             La semana acumula esos valores y cierra el dia de pago que elijas
             (por defecto el sabado), asi que el total que muestra es justo lo que
             hay que pagar. Sin calculadora.
+
+            ### Novedades de la 1.5.0
+
+            - El logo del local en todo el sistema: en la cabecera de la ventana,
+              como icono del programa (escritorio y barra de tareas), en el
+              instalador y en la cabecera del informe PDF.
 
             ### Novedades de la 1.4.x
 

@@ -87,6 +87,17 @@ def a_excel(r, ruta):
     for linea in _notas(r):
         h.cell(row=fila, column=1, value=linea).font = Font(size=9, color="6C625C")
         fila += 1
+    try:
+        import base64, io
+        import imagen_marca
+        from openpyxl.drawing.image import Image as ImagenXL
+        logo = ImagenXL(io.BytesIO(base64.b64decode(imagen_marca.PDF_JPEG)))
+        logo.width = logo.height = 66
+        h.add_image(logo, "F1")                 # arriba a la derecha
+        h.row_dimensions[1].height = 24
+        h.row_dimensions[2].height = 24
+    except Exception:
+        pass                                     # sin logo, el informe igual sirve
     h.page_setup.orientation = "landscape"
     h.page_setup.fitToWidth = 1
     h.sheet_properties.pageSetUpPr.fitToPage = True
@@ -127,6 +138,21 @@ def a_excel(r, ruta):
 
 
 # ----------------------------------------------------------------------- PDF
+def _logo_pdf(lado):
+    """
+    El logo del local para la cabecera del PDF. Va en JPEG porque reportlab lo
+    incrusta sin necesitar Pillow, que no va dentro del programa.
+    """
+    try:
+        import base64, io
+        import imagen_marca
+        from reportlab.platypus import Image
+        return Image(io.BytesIO(base64.b64decode(imagen_marca.PDF_JPEG)),
+                     width=lado, height=lado)
+    except Exception:
+        return None
+
+
 def a_pdf(r, ruta):
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -150,8 +176,18 @@ def a_pdf(r, ruta):
     doc = SimpleDocTemplate(ruta, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm,
                             topMargin=14 * mm, bottomMargin=14 * mm,
                             title="Pagos - " + r["titulo"])
-    hist = [Paragraph(r["negocio"], h1),
-            Paragraph("%s &nbsp;|&nbsp; Pagos &nbsp;|&nbsp; %s" % (r["ciudad"], r["titulo"]), h2)]
+    titulo = [Paragraph(r["negocio"], h1),
+              Paragraph("%s &nbsp;|&nbsp; Pagos &nbsp;|&nbsp; %s" % (r["ciudad"], r["titulo"]), h2)]
+    logo = _logo_pdf(24 * mm)
+    if logo is not None:
+        cab = Table([[logo, titulo]], colWidths=[29 * mm, None])
+        cab.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                                 ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
+        cab.hAlign = "LEFT"
+        hist = [cab]
+    else:
+        hist = titulo
 
     datos = [["Trabajador", "Dias\ntrabajados", "Dias\npagados", "Se le ha\npagado",
               "Dias por\npagar", "SE LE\nDEBE"]]

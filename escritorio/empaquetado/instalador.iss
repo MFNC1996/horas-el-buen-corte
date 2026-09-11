@@ -2,7 +2,7 @@
 ; Instala la aplicacion, crea accesos directos y deja un desinstalador.
 
 #define Nombre    "Control de Horas"
-#define Version   "1.4.3"
+#define Version   "1.5.0"
 #define Empresa   "Macoem"
 #define Ejecutable "ControlDeHoras.exe"
 
@@ -28,6 +28,8 @@ PrivilegesRequired=lowest
 UninstallDisplayName={#Nombre}
 UninstallDisplayIcon={app}\{#Ejecutable}
 SetupIconFile=icono.ico
+WizardImageFile=instalador-grande.bmp
+WizardSmallImageFile=instalador-chico.bmp
 
 [Languages]
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"

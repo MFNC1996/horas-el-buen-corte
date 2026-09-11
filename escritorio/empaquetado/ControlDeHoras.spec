@@ -9,11 +9,13 @@ a = Analysis(
     pathex=[raiz],
     binaries=[],
     datas=[],
-    hiddenimports=["openpyxl", "reportlab", "reportlab.graphics.barcode"],
+    hiddenimports=["openpyxl", "reportlab", "reportlab.graphics.barcode",
+                   "PIL", "PIL.Image", "imagen_marca", "instancia", "informes"],
     hookspath=[],
     runtime_hooks=[],
-    # Fuera lo que no usamos: el .exe baja de ~40 MB a ~15 MB.
-    excludes=["numpy", "pandas", "matplotlib", "PIL", "scipy",
+    # Fuera lo que no usamos. Pillow (PIL) NO se puede sacar: reportlab 5 lo
+    # importa siempre, y sin el falla la exportacion a PDF.
+    excludes=["numpy", "pandas", "matplotlib", "scipy",
               "PyQt5", "PySide2", "IPython", "pytest"],
     noarchive=False,
 )
