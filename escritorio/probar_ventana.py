@@ -29,6 +29,13 @@ def check(nombre, cond):
     if not cond:
         fallas.append(nombre)
 
+# Durante las pruebas nadie va a presionar OK: cualquier dialogo que se abra
+# sin querer tiene que volver al tiro, o la compilacion se queda colgada.
+import tkinter.messagebox as mb
+for _n in ("showinfo", "showwarning", "showerror"):
+    setattr(mb, _n, lambda *a, **k: None)
+mb.askyesno = lambda *a, **k: False
+
 v = app.App(presentacion=False)
 v.withdraw()
 
