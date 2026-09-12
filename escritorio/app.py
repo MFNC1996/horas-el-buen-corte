@@ -404,9 +404,9 @@ class App(tk.Tk):
         ttk.Button(f, text="Eliminar dia", command=self.eliminar_dia).pack(side="right")
 
         tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
-                 text="Las horas normales y las extra se pagan por separado: clic en "
-                      "☐ para marcar cada una.     Corregir las horas: doble clic en la "
-                      "fila.     Borrar un dia: eligelo y presiona Eliminar dia."
+                 text="Las horas normales y las extra se pagan por separado: clic en ☐ "
+                      "para marcar cada una.     Doble clic en la fila para corregir "
+                      "las horas."
                  ).pack(fill="x", pady=(8, 4))
 
         cols = ("fecha", "trab", "horas", "norm", "pnorm", "extra", "pextra", "total")
