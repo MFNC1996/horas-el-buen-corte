@@ -49,8 +49,9 @@ d.guardar_config({"horas_contrato": "7", "modo_extra": "fijo",
                   "valor_extra_global": "3900"})
 # Algunos dias ya pagados, para que se vea el check.
 for n in (6, 5, 4):
-    d.marcar_pagado(juan, f(n))
+    d.marcar_pagado(juan, f(n))                    # dias pagados enteros
 d.marcar_pagado(ana, f(3))
+d.marcar_pagado(juan, f(2), "extra")               # solo las horas extra
 
 d.guardar_config({"negocio": "Carniceria El Buen Corte", "ciudad": "Loncoche",
                   "horas_contrato": "7", "umbral_semanal": "42",

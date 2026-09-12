@@ -22,17 +22,16 @@ def _fecha(iso):
 
 
 def _estado(d):
+    """Como esta pagado ese dia: todo, solo una parte, o nada."""
     if not d.get("completa", True):
         return "falta marcar"
     if d.get("pagado"):
         return "pagado el %s-%s" % (d["pagado_en"][8:10], d["pagado_en"][5:7])
+    if d.get("pagado_normal"):
+        return "pagadas solo las normales"
+    if d.get("pagado_extra"):
+        return "pagadas solo las extra"
     return "por pagar"
-
-
-def _valor(d):
-    if not d.get("completa", True):
-        return 0
-    return d["monto_pagado"] if d.get("pagado") else d["total"]
 
 
 def _notas(r):
@@ -40,7 +39,9 @@ def _notas(r):
         "Horas trabajadas = de la entrada a la salida, menos la colacion.",
         "Horas extra: lo que pasa de %s horas en el dia. La hora extra se paga con %s."
         % (r["contrato"], r["regla_extra"]),
-        "Lo pagado es el monto que quedo registrado al marcar el dia como pagado.",
+        "Las horas normales y las extra se pagan por separado: un dia puede tener "
+        "una parte pagada y la otra pendiente.",
+        "Lo pagado es el monto que quedo registrado al marcar cada parte como pagada.",
         AUTOR,
     ]
 
@@ -71,17 +72,19 @@ def a_excel(r, ruta):
     h["A2"] = "%s  |  Pagos  |  %s" % (r["ciudad"], r["titulo"])
     h["A2"].font = Font(size=11, bold=True, color=TINTA)
     fila = 4
-    encabezado(h, fila, [("Trabajador", 26), ("Dias trabajados", 15), ("Dias pagados", 14),
-                         ("Se le ha pagado", 17), ("Dias por pagar", 15), ("SE LE DEBE", 17)])
+    encabezado(h, fila, [("Trabajador", 26), ("Dias", 8), ("Pagado en normales", 18),
+                         ("Pagado en extra", 16), ("Debe en normales", 17),
+                         ("Debe en extra", 15), ("SE LE DEBE", 16)])
     for f in r["filas"]:
         fila += 1
-        for i, v in enumerate([f["nombre"], f["turnos"], f["dias_pagados"], f["pagado"],
-                               f["dias_pendientes"], f["por_pagar"]], start=1):
+        for i, v in enumerate([f["nombre"], f["turnos"], f["pagado_normal"],
+                               f["pagado_extra"], f["por_pagar_normal"],
+                               f["por_pagar_extra"], f["por_pagar"]], start=1):
             c = h.cell(row=fila, column=i, value=v)
             c.border = borde
-            if i in (4, 6):
+            if i >= 3:
                 c.number_format = '"$"#,##0'
-            if i == 6 and f["por_pagar"]:
+            if i == 7 and f["por_pagar"]:
                 c.font = Font(bold=True, color=ROJO)
     fila += 2
     for linea in _notas(r):
@@ -93,7 +96,7 @@ def a_excel(r, ruta):
         from openpyxl.drawing.image import Image as ImagenXL
         logo = ImagenXL(io.BytesIO(base64.b64decode(imagen_marca.PDF_JPEG)))
         logo.width = logo.height = 66
-        h.add_image(logo, "F1")                 # arriba a la derecha
+        h.add_image(logo, "G1")                 # arriba a la derecha
         h.row_dimensions[1].height = 24
         h.row_dimensions[2].height = 24
     except Exception:
@@ -107,9 +110,9 @@ def a_excel(r, ruta):
     d["A1"] = "Dias trabajados  -  %s" % r["titulo"]
     d["A1"].font = Font(size=13, bold=True, color=TINTA)
     fila = 3
-    encabezado(d, fila, [("Trabajador", 24), ("Fecha", 17), ("Horas trabajadas", 15),
-                         ("Horas normales", 15), ("Horas extra", 13), ("A pagar", 15),
-                         ("Estado", 20)])
+    encabezado(d, fila, [("Trabajador", 22), ("Fecha", 16), ("Horas", 10),
+                         ("H. normales", 13), ("$ normales", 14), ("H. extra", 11),
+                         ("$ extra", 13), ("Total del dia", 14), ("Estado", 24)])
     for f in r["filas"]:
         for x in sorted(f["dias"], key=lambda y: y["fecha"]):
             fila += 1
@@ -117,16 +120,18 @@ def a_excel(r, ruta):
             valores = [f["nombre"], _fecha(x["fecha"]),
                        hhmm_txt(x["horas"]) if completo else "-",
                        hhmm_txt(x["normales"]) if completo else "-",
+                       x["pago_normal"] if completo else 0,
                        hhmm_txt(x["extra"]) if x["extra"] else "-",
-                       _valor(x), _estado(x)]
+                       x["pago_extra"] if completo else 0,
+                       x["total"] if completo else 0, _estado(x)]
             for i, v in enumerate(valores, start=1):
                 c = d.cell(row=fila, column=i, value=v)
                 c.border = borde
-                if i in (3, 4, 5):
+                if i in (3, 4, 6):
                     c.alignment = Alignment(horizontal="center")
-                if i == 6:
+                if i in (5, 7, 8):
                     c.number_format = '"$"#,##0'
-                if i == 7:
+                if i == 9:
                     c.font = Font(bold=True, color=VERDE if x.get("pagado") else
                                   (AMBAR if not completo else ROJO))
     d.freeze_panes = "A4"
@@ -189,13 +194,14 @@ def a_pdf(r, ruta):
     else:
         hist = titulo
 
-    datos = [["Trabajador", "Dias\ntrabajados", "Dias\npagados", "Se le ha\npagado",
-              "Dias por\npagar", "SE LE\nDEBE"]]
+    datos = [["Trabajador", "Dias", "Pagado en\nnormales", "Pagado en\nextra",
+              "Debe en\nnormales", "Debe en\nextra", "SE LE\nDEBE"]]
     for f in r["filas"]:
-        datos.append([f["nombre"], str(f["turnos"]), str(f["dias_pagados"]),
-                      pesos(f["pagado"]), str(f["dias_pendientes"]), pesos(f["por_pagar"])])
-    tabla = Table(datos, colWidths=[52 * mm, 23 * mm, 22 * mm, 28 * mm, 22 * mm, 28 * mm],
-                  repeatRows=1)
+        datos.append([f["nombre"], str(f["turnos"]), pesos(f["pagado_normal"]),
+                      pesos(f["pagado_extra"]), pesos(f["por_pagar_normal"]),
+                      pesos(f["por_pagar_extra"]), pesos(f["por_pagar"])])
+    tabla = Table(datos, colWidths=[43 * mm, 13 * mm, 25 * mm, 23 * mm, 25 * mm,
+                                    23 * mm, 27 * mm], repeatRows=1)
     tabla.hAlign = "LEFT"
     estilo = [
         ("BACKGROUND", (0, 0), (-1, 0), tinta), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -206,33 +212,36 @@ def a_pdf(r, ruta):
     ]
     for i, f in enumerate(r["filas"], start=1):
         if f["por_pagar"]:
-            estilo += [("TEXTCOLOR", (5, i), (5, i), rojo), ("FONTNAME", (5, i), (5, i),
-                                                                 "Helvetica-Bold")]
+            estilo += [("TEXTCOLOR", (6, i), (6, i), rojo),
+                       ("FONTNAME", (6, i), (6, i), "Helvetica-Bold")]
     tabla.setStyle(TableStyle(estilo))
     hist.append(tabla)
 
     for f in r["filas"]:
         hist.append(Paragraph("%s &nbsp;&mdash;&nbsp; pagado %s, se le debe %s"
                               % (f["nombre"], pesos(f["pagado"]), pesos(f["por_pagar"])), sec))
-        det = [["Fecha", "Horas", "Normales", "Extra", "A pagar", "Estado"]]
+        det = [["Fecha", "Horas", "Normales", "$ normales", "Extra", "$ extra",
+                "Total dia", "Estado"]]
         colores = []
         for j, x in enumerate(sorted(f["dias"], key=lambda y: y["fecha"]), start=1):
             completo = x.get("completa", True)
             det.append([_fecha(x["fecha"]),
                         hhmm_txt(x["horas"]) if completo else "-",
                         hhmm_txt(x["normales"]) if completo else "-",
+                        pesos(x["pago_normal"]) if completo else "-",
                         hhmm_txt(x["extra"]) if x["extra"] else "-",
-                        pesos(_valor(x)) if completo else "-", _estado(x)])
-            colores.append(("TEXTCOLOR", (5, j), (5, j),
+                        pesos(x["pago_extra"]) if x["extra"] else "-",
+                        pesos(x["total"]) if completo else "-", _estado(x)])
+            colores.append(("TEXTCOLOR", (7, j), (7, j),
                             verde if x.get("pagado") else (ambar if not completo else rojo)))
-        td = Table(det, colWidths=[36 * mm, 20 * mm, 22 * mm, 18 * mm, 26 * mm, 36 * mm],
-                   repeatRows=1)
+        td = Table(det, colWidths=[26 * mm, 15 * mm, 18 * mm, 22 * mm, 15 * mm,
+                                   20 * mm, 22 * mm, 41 * mm], repeatRows=1)
         td.hAlign = "LEFT"
         td.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), gris), ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8), ("ALIGN", (1, 0), (4, -1), "RIGHT"),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5), ("ALIGN", (1, 0), (6, -1), "RIGHT"),
             ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#D5CFC9")),
-            ("FONTNAME", (5, 1), (5, -1), "Helvetica-Bold"),
+            ("FONTNAME", (7, 1), (7, -1), "Helvetica-Bold"),
             ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ] + colores))
         hist.append(td)

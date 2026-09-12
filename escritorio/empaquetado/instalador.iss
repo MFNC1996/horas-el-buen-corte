@@ -2,7 +2,7 @@
 ; Instala la aplicacion, crea accesos directos y deja un desinstalador.
 
 #define Nombre    "Control de Horas"
-#define Version   "1.5.1"
+#define Version   "1.6.0"
 #define Empresa   "Macoem"
 #define Ejecutable "ControlDeHoras.exe"
 

@@ -39,6 +39,10 @@ ETIQUETAS = {
 # dejamos de considerar esa jornada abierta y la siguiente marca empieza una nueva.
 HORAS_JORNADA_ABIERTA = 20
 
+# Un dia se paga en dos partes, que se pueden pagar por separado.
+CONCEPTOS = ("normal", "extra")
+NOMBRE_CONCEPTO = {"normal": "horas normales", "extra": "horas extra"}
+
 DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
          "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
@@ -242,9 +246,10 @@ class Datos(object):
         c.execute("""CREATE TABLE IF NOT EXISTS pagos (
                        trabajador_id INTEGER NOT NULL REFERENCES trabajadores(id),
                        fecha         TEXT    NOT NULL,
+                       concepto      TEXT    NOT NULL,   -- normal | extra
                        monto         INTEGER NOT NULL,
                        pagado_en     TEXT    NOT NULL,
-                       PRIMARY KEY (trabajador_id, fecha))""")
+                       PRIMARY KEY (trabajador_id, fecha, concepto))""")
         # Migracion para bases creadas antes de que existiera el valor fijo.
         columnas = [f[1] for f in c.execute("PRAGMA table_info(trabajadores)")]
         if "valor_hora_extra" not in columnas:
@@ -260,6 +265,7 @@ class Datos(object):
             c.execute("INSERT OR IGNORE INTO config VALUES (?,?)", (k, v))
         c.commit()
         self.migrar_jornadas_a_marcas()
+        self._migrar_pagos_en_dos_partes()
 
     def cerrar(self):
         self.cx.close()
@@ -440,12 +446,13 @@ class Datos(object):
 
     # -- correcciones del administrador ---------------------------------
     def _no_pagado(self, tid, fecha):
-        """Un dia ya pagado no se corrige: habria que desmarcarlo primero."""
-        p = self.pago_de(tid, fecha)
-        if p:
+        """Un dia con algo ya pagado no se corrige: primero hay que desmarcarlo."""
+        pagados = [p for p in self.pagos_de(tid, fecha).values() if p]
+        if pagados:
             raise ValueError(
-                "Ese dia ya esta pagado (%s el %s). Para corregirlo, primero "
-                "quitale el check de pagado." % (pesos(p["monto"]), p["pagado_en"]))
+                "Ese dia ya tiene un pago registrado (%s el %s). Para corregirlo, "
+                "primero quitale los checks de pagado."
+                % (pesos(sum(p["monto"] for p in pagados)), pagados[0]["pagado_en"]))
 
     def editar_marca(self, mid, hora=None, tipo=None):
         m = self.cx.execute("SELECT * FROM marcas WHERE id=?", (mid,)).fetchone()
@@ -513,55 +520,114 @@ class Datos(object):
         return cur.rowcount
 
     # -- pagos ---------------------------------------------------------
-    def pago_de(self, tid, fecha):
-        f = self.cx.execute("SELECT * FROM pagos WHERE trabajador_id=? AND fecha=?",
-                            (tid, fecha)).fetchone()
-        return dict(f) if f else None
+    #  Cada dia se paga en dos partes: las horas normales y las extra. Se
+    #  pueden pagar juntas o por separado, para poder pagarle a alguien solo
+    #  sus horas extra, por ejemplo.
+
+    def _migrar_pagos_en_dos_partes(self):
+        """Pasa los pagos del formato anterior (un solo monto por dia) a dos."""
+        columnas = [f[1] for f in self.cx.execute("PRAGMA table_info(pagos)")]
+        if "concepto" in columnas or not columnas:
+            return
+        viejos = [dict(f) for f in self.cx.execute("SELECT * FROM pagos")]
+        cfg = self.config()
+        trabajadores = dict((t["id"], dict(t))
+                            for t in self.trabajadores(solo_activos=False))
+        self.cx.execute("ALTER TABLE pagos RENAME TO pagos_de_un_solo_monto")
+        self.cx.execute("""CREATE TABLE pagos (
+                             trabajador_id INTEGER NOT NULL REFERENCES trabajadores(id),
+                             fecha         TEXT    NOT NULL,
+                             concepto      TEXT    NOT NULL,
+                             monto         INTEGER NOT NULL,
+                             pagado_en     TEXT    NOT NULL,
+                             PRIMARY KEY (trabajador_id, fecha, concepto))""")
+        for v in viejos:
+            t = trabajadores.get(v["trabajador_id"], {})
+            horas = horas_de_marcas(self.marcas_de(v["trabajador_id"], v["fecha"]))
+            val = valor_dia(cfg, t, horas)
+            # Lo que se pagó se reparte entre las dos partes tal como valen hoy.
+            if val["total"] > 0:
+                escala = float(v["monto"]) / val["total"]
+                normal = int(round(val["pago_normal"] * escala))
+            else:
+                normal = int(v["monto"])
+            partes = [("normal", normal), ("extra", int(v["monto"]) - normal)]
+            for concepto, monto in partes:
+                if monto > 0:
+                    self.cx.execute("INSERT INTO pagos VALUES (?,?,?,?,?)",
+                                    (v["trabajador_id"], v["fecha"], concepto,
+                                     monto, v["pagado_en"]))
+        self.cx.commit()
 
     def pagos(self):
-        """{(trabajador_id, fecha): pago} de todos los dias pagados."""
-        return dict(((f["trabajador_id"], f["fecha"]), dict(f))
+        """{(trabajador_id, fecha, concepto): pago} de todo lo pagado."""
+        return dict(((f["trabajador_id"], f["fecha"], f["concepto"]), dict(f))
                     for f in self.cx.execute("SELECT * FROM pagos"))
 
-    def marcar_pagado(self, tid, fecha, hoy=None):
-        """
-        Deja el dia como pagado, con lo que vale en este momento.
+    def pago_de(self, tid, fecha, concepto):
+        f = self.cx.execute("SELECT * FROM pagos WHERE trabajador_id=? AND fecha=? "
+                            "AND concepto=?", (tid, fecha, concepto)).fetchone()
+        return dict(f) if f else None
 
-        Solo se pueden pagar dias completos y con valor: un dia al que le falta
-        una marca vale $0, y pagarlo asi seria un error.
+    def pagos_de(self, tid, fecha):
+        return dict((c, self.pago_de(tid, fecha, c)) for c in CONCEPTOS)
+
+    @staticmethod
+    def _cuales(concepto):
+        return CONCEPTOS if concepto in (None, "todo") else (concepto,)
+
+    def marcar_pagado(self, tid, fecha, concepto="todo", hoy=None):
         """
-        if self.pago_de(tid, fecha):
-            return
-        dia = [d for d in dias_con_valor(self, fecha, fecha, tid)]
-        if not dia:
+        Deja pagada una parte del dia (o las dos), con lo que vale ahora.
+
+        Solo se pagan dias completos: a uno al que le falta una marca no se le
+        conoce el valor. Y no se paga una parte que vale $0.
+        """
+        dias = dias_con_valor(self, fecha, fecha, tid)
+        if not dias:
             raise ValueError("Ese trabajador no tiene marcas ese dia.")
-        dia = dia[0]
+        dia = dias[0]
         if not dia["completa"]:
             raise ValueError("A ese dia le faltan marcas (%s). Completalo antes de "
                              "pagarlo." % ", ".join(x.lower() for x in dia["faltan"]))
-        if dia["total"] <= 0:
+        cuales = self._cuales(concepto)
+        montos = {"normal": dia["pago_normal"], "extra": dia["pago_extra"]}
+        pagados = self.pagos_de(tid, fecha)
+        pagado_ahora = 0
+        for c in cuales:
+            if pagados[c] or montos[c] <= 0:
+                continue
+            self.cx.execute("INSERT INTO pagos VALUES (?,?,?,?,?)",
+                            (tid, fecha, c, int(montos[c]),
+                             (hoy or date.today()).isoformat()))
+            pagado_ahora += int(montos[c])
+        self.cx.commit()
+        if pagado_ahora == 0 and not any(pagados[c] for c in cuales):
+            if len(cuales) == 1:
+                raise ValueError("Ese dia no tiene %s que pagar."
+                                 % NOMBRE_CONCEPTO[cuales[0]])
             raise ValueError("Ese dia vale $0. Revisa el valor hora del trabajador "
                              "en la pestana Trabajadores.")
-        self.cx.execute("INSERT INTO pagos VALUES (?,?,?,?)",
-                        (tid, fecha, int(dia["total"]),
-                         (hoy or date.today()).isoformat()))
-        self.cx.commit()
-        return dia["total"]
+        return pagado_ahora
 
-    def desmarcar_pagado(self, tid, fecha):
-        self.cx.execute("DELETE FROM pagos WHERE trabajador_id=? AND fecha=?",
-                        (tid, fecha))
+    def desmarcar_pagado(self, tid, fecha, concepto="todo"):
+        for c in self._cuales(concepto):
+            self.cx.execute("DELETE FROM pagos WHERE trabajador_id=? AND fecha=? "
+                            "AND concepto=?", (tid, fecha, c))
         self.cx.commit()
 
-    def pagar_pendientes(self, tid, desde=None, hasta=None, hoy=None):
-        """Paga de una vez todos los dias completos y sin pagar del rango."""
-        pagados, total = 0, 0
+    def pagar_pendientes(self, tid, desde=None, hasta=None, concepto="todo", hoy=None):
+        """Paga de una vez lo que falte del rango: todo, o solo una de las partes."""
+        dias, total = 0, 0
         for d in dias_con_valor(self, desde, hasta, tid):
-            if d["completa"] and not d["pagado"] and d["total"] > 0:
-                self.marcar_pagado(tid, d["fecha"], hoy)
-                pagados += 1
-                total += d["total"]
-        return pagados, total
+            if not d["completa"]:
+                continue
+            falta = sum(d["por_pagar_" + c] for c in self._cuales(concepto))
+            if falta <= 0:
+                continue
+            total += self.marcar_pagado(tid, d["fecha"], concepto, hoy)
+            dias += 1
+        return dias, total
 
     def marcas(self, desde=None, hasta=None, tid=None):
         sql = ("SELECT m.*, t.nombre FROM marcas m "
@@ -834,10 +900,19 @@ def dias_con_valor(datos, desde, hasta, tid=None):
         d = dict(j)
         d.update(valor_dia(cfg, t, j["horas"]))
         d["extra_dia"] = d["extra"]        # nombre que usan los informes
-        p = pagos.get((j["trabajador_id"], j["fecha"]))
-        d["pagado"] = p is not None
-        d["monto_pagado"] = p["monto"] if p else 0
-        d["pagado_en"] = p["pagado_en"] if p else ""
+        cobrado = 0
+        for c in CONCEPTOS:
+            p = pagos.get((j["trabajador_id"], j["fecha"], c))
+            d["pagado_" + c] = p is not None
+            d["monto_pagado_" + c] = p["monto"] if p else 0
+            d["pagado_en_" + c] = p["pagado_en"] if p else ""
+            d["por_pagar_" + c] = 0 if p else d["pago_" + c]
+            cobrado += d["monto_pagado_" + c]
+        d["cobrado"] = cobrado
+        d["por_pagar"] = d["por_pagar_normal"] + d["por_pagar_extra"]
+        d["pagado_algo"] = d["pagado_normal"] or d["pagado_extra"]
+        d["pagado"] = (d["completa"] and d["total"] > 0 and d["por_pagar"] == 0)
+        d["pagado_en"] = d["pagado_en_normal"] or d["pagado_en_extra"]
         salida.append(d)
     salida.sort(key=lambda x: (x["fecha"], x["nombre"]))
     return salida
@@ -862,8 +937,7 @@ def _agrupar(datos, desde, hasta, titulo, subtitulo=""):
         if not suyos:
             continue
         pagados = [d for d in suyos if d["pagado"]]
-        pendientes = [d for d in suyos
-                      if not d["pagado"] and d["completa"] and d["total"] > 0]
+        pendientes = [d for d in suyos if d["completa"] and d["por_pagar"] > 0]
         incompletos = [d for d in suyos if not d["completa"]]
         f = {
             "id": t["id"], "nombre": t["nombre"],
@@ -876,9 +950,13 @@ def _agrupar(datos, desde, hasta, titulo, subtitulo=""):
             "extra": round(sum(d["extra"] for d in suyos), 2),
             "total": sum(d["total"] for d in suyos),
             "dias_pagados": len(pagados),
-            "pagado": sum(d["monto_pagado"] for d in pagados),
+            "pagado_normal": sum(d["monto_pagado_normal"] for d in suyos),
+            "pagado_extra": sum(d["monto_pagado_extra"] for d in suyos),
+            "pagado": sum(d["cobrado"] for d in suyos),
             "dias_pendientes": len(pendientes),
-            "por_pagar": sum(d["total"] for d in pendientes),
+            "por_pagar_normal": sum(d["por_pagar_normal"] for d in pendientes),
+            "por_pagar_extra": sum(d["por_pagar_extra"] for d in pendientes),
+            "por_pagar": sum(d["por_pagar"] for d in pendientes),
             "dias": suyos, "detalle": suyos, "incompletos": incompletos,
         }
         filas.append(f)
@@ -886,7 +964,8 @@ def _agrupar(datos, desde, hasta, titulo, subtitulo=""):
     filas.sort(key=lambda f: f["nombre"].lower())
     totales = {}
     for k in ("turnos", "horas", "ordinarias", "extra", "total",
-              "dias_pagados", "pagado", "dias_pendientes", "por_pagar"):
+              "dias_pagados", "pagado", "pagado_normal", "pagado_extra",
+              "dias_pendientes", "por_pagar", "por_pagar_normal", "por_pagar_extra"):
         v = sum(f[k] for f in filas)
         totales[k] = round(v, 2) if isinstance(v, float) else v
     return {
@@ -921,9 +1000,9 @@ def pendiente_fuera(datos, desde, hasta):
     """
     n, total = 0, 0
     for d in dias_con_valor(datos, None, None):
-        if d["pagado"] or not d["completa"]:
+        if not d["completa"] or d["por_pagar"] <= 0:
             continue
         if (desde and d["fecha"] < desde) or (hasta and d["fecha"] > hasta):
             n += 1
-            total += d["total"]
+            total += d["por_pagar"]
     return n, total
