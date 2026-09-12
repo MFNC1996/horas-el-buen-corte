@@ -33,6 +33,7 @@ jobs:
           python escritorio/probar_nucleo.py
           python escritorio/probar_marcas.py
           python escritorio/probar_pagos.py
+          python escritorio/probar_correo.py
 
       - name: Comprobar que la ventana se puede construir en Windows
         timeout-minutes: 5
@@ -223,8 +224,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.6.1
-          name: Control de Horas 1.6.1
+          tag_name: v1.7.0
+          name: Control de Horas 1.7.0
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -254,6 +255,18 @@ jobs:
             La semana acumula esos valores y cierra el dia de pago que elijas
             (por defecto el sabado), asi que el total que muestra es justo lo que
             hay que pagar. Sin calculadora.
+
+            ### Novedad de la 1.7.0: aviso por correo al trabajador
+
+            Cada vez que alguien marca, le llega un correo con lo que marco, a
+            que hora, y como va su dia. Se enciende en Configuracion, con la
+            cuenta que envia (Gmail viene puesto de fabrica) y una CONTRASENA DE
+            APLICACION de esa cuenta, no la contrasena normal. El correo de cada
+            trabajador se escribe en la pestana Trabajadores.
+
+            Si no hay internet, la marca se registra igual: el aviso queda
+            esperando y sale solo cuando vuelve la conexion. En Configuracion se
+            ve cuantos salieron, cuantos esperan y cual fue el ultimo problema.
 
             ### Novedades de la 1.6.0
 

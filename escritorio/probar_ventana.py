@@ -14,6 +14,7 @@ except Exception:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ["LOCALAPPDATA"] = tempfile.mkdtemp()
 os.environ["XDG_DATA_HOME"] = os.environ["LOCALAPPDATA"]
+os.environ["CH_SIN_CORREO"] = "1"     # el hilo que envia no corre en las pruebas
 
 import nucleo as N
 
@@ -294,6 +295,79 @@ check("no se le debe nada", fila_r["por_pagar"] == 0)
 check("el resumen igual muestra lo pagado en cada parte",
       fila_r["pagado_normal"] > 0 and fila_r["pagado_extra"] > 0)
 check("el boton lo dice", v.btn_pagar_todo.cget("text") == "Todo pagado")
+
+print("\n--- el correo del trabajador ---")
+v.tabs.select(3)
+v.tv_t.selection_set(str(uno)); v.cargar_trabajador_sel()
+check("la ficha tiene campo de correo", v.e_tcorreo.get() == "")
+v._set(v.e_tcorreo, "ana@gmail.com")
+v.guardar_trabajador()
+check("se guarda con el trabajador",
+      v.datos.trabajador(uno)["correo"] == "ana@gmail.com")
+check("y sale en la lista",
+      "ana@gmail.com" in [str(x) for x in v.tv_t.item(str(uno))["values"]])
+v.tv_t.selection_set(str(uno)); v.cargar_trabajador_sel()
+check("al elegirlo de nuevo aparece", v.e_tcorreo.get() == "ana@gmail.com")
+errores = []
+mb.showerror = lambda *a, **k: errores.append(a)
+v._set(v.e_tcorreo, "ana-arroba-gmail")
+v.guardar_trabajador()
+check("un correo mal escrito no se guarda",
+      v.datos.trabajador(uno)["correo"] == "ana@gmail.com" and errores)
+check("y dice como tiene que ser", "nombre@gmail.com" in str(errores[-1]))
+v._set(v.e_tcorreo, "ana@gmail.com"); v.guardar_trabajador()
+mb.showerror = lambda *a, **k: fallas.append("showerror: " + str(a))
+
+print("\n--- encender el aviso por correo ---")
+v.tabs.select(4)
+check("viene apagado", not v.correo_activo.get())
+check("con los campos bloqueados", str(v.e_cservidor.cget("state")) == "disabled")
+v.correo_activo.set(True); v._refrescar_correo()
+check("al encenderlo se habilitan", str(v.e_cclave.cget("state")) == "normal")
+check("la contrasena no se ve al escribirla", v.e_cclave.cget("show") != "")
+check("Gmail viene puesto de fabrica", v.e_cservidor.get() == "smtp.gmail.com")
+check("con su puerto", v.e_cpuerto.get() == "587")
+
+avisos = []
+mb.showwarning = lambda *a, **k: avisos.append(a)
+v.guardar_config()
+check("no deja encenderlo sin la cuenta que envia", bool(avisos))
+check("y la configuracion no queda encendida a medias",
+      v.datos.config()["correo_activo"] == "0")
+mb.showwarning = lambda *a, **k: None
+
+v._set(v.e_cusuario, "carniceria@gmail.com")
+v._set(v.e_cclave, "clave-de-aplicacion")
+infos = []
+mb.showinfo = lambda *a, **k: infos.append(a)
+v.guardar_config()
+c = v.datos.config()
+check("ahora si lo guarda", c["correo_activo"] == "1")
+check("guarda la cuenta", c["correo_usuario"] == "carniceria@gmail.com")
+check("y la contrasena", c["correo_clave"] == "clave-de-aplicacion")
+check("avisa de los que quedaron sin correo",
+      any("todavia no tienen correo" in str(a) for a in infos))
+mb.showinfo = lambda *a, **k: None
+
+print("\n--- marcar avisa por correo ---")
+# Gente nueva, para no chocar con los dias ya pagados de la prueba anterior.
+con = v.datos.agregar_trabajador("Con Correo", 3000, correo="con@gmail.com")
+sin = v.datos.agregar_trabajador("Sin Correo", 3000)
+v.recargar_todo()
+v.tabs.select(0)
+v.elegir(con); v.marcar()
+check("la pantalla dice a donde se le aviso",
+      "con@gmail.com" in v.lbl_aviso.cget("text"))
+check("y el correo quedo en la cola", len(v.datos.correos_por_enviar()) == 1)
+v._mirar_correos(seguir=False)
+check("el estado en pantalla cuenta lo que espera",
+      "1 esperando conexion" in v.lbl_correo.cget("text"))
+v.datos.correo_enviado(v.datos.correos_por_enviar()[0]["id"])
+v._mirar_correos(seguir=False)
+check("y lo que ya salio", "1 avisos enviados" in v.lbl_correo.cget("text"))
+check("el que no tiene correo marca igual",
+      v.datos.marcar(sin)["correo"] is None
+      and len(v.datos.correos_por_enviar()) == 0)
 
 print("\n--- respaldos ---")
 check("hizo la copia del dia", v.datos.ultimo_respaldo()[0] is not None)

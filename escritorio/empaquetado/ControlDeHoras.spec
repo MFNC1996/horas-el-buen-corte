@@ -10,7 +10,8 @@ a = Analysis(
     binaries=[],
     datas=[],
     hiddenimports=["openpyxl", "reportlab", "reportlab.graphics.barcode",
-                   "PIL", "PIL.Image", "imagen_marca", "instancia", "informes"],
+                   "PIL", "PIL.Image", "imagen_marca", "instancia", "informes",
+                   "correo", "smtplib", "email.message"],
     hookspath=[],
     runtime_hooks=[],
     # Fuera lo que no usamos. Pillow (PIL) NO se puede sacar: reportlab 5 lo

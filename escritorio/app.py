@@ -9,6 +9,7 @@ Aplicacion de escritorio. No necesita internet ni servidor.
 import os
 import subprocess
 import sys
+import threading
 import traceback
 from datetime import date, datetime, timedelta
 
@@ -17,6 +18,7 @@ from tkinter import ttk, messagebox, filedialog
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nucleo as N
+import correo as CO
 import instancia
 
 # Paleta del logo del local
@@ -32,7 +34,7 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.6.1"
+VERSION = "1.7.0"
 AUTOR = "Macoem"
 # El titulo tambien sirve para encontrar la ventana si ya esta abierta.
 TITULO = "Control de Horas  -  El Buen Corte   |   by %s" % AUTOR
@@ -176,6 +178,17 @@ class App(tk.Tk):
         paso("Cargando trabajadores y dias...", 62)
         self.recargar_todo()
         self._latido()
+
+        paso("Dejando el correo listo...", 78)
+        try:
+            self.datos.purgar_correos()
+        except Exception:
+            pass
+        # El envio va en otro hilo: la ventana nunca se queda pegada esperando
+        # al servidor de correo.
+        self.cartero = CO.arrancar(self.datos.ruta)
+        self.protocol("WM_DELETE_WINDOW", self.cerrar)
+        self._mirar_correos()
 
         def mostrar():
             if carga is not None and carga.winfo_exists():
@@ -377,9 +390,12 @@ class App(tk.Tk):
         # marcar por error a nombre del anterior.
         self.sel_trab = None
         self.recargar_todo()
-        self.lbl_aviso.config(
-            text="Listo, %s:  %s registrada a las %s" % (nombre, r["etiqueta"], r["hora"]),
-            fg=VERDE, bg=BLANCO)
+        texto = "Listo, %s:  %s registrada a las %s" % (nombre, r["etiqueta"], r["hora"])
+        if r.get("correo"):
+            texto += "\nTe mandamos el aviso a %s" % r["correo"]
+            if self.cartero is not None:
+                self.cartero.apurar()           # que salga ahora, no en un rato
+        self.lbl_aviso.config(text=texto, fg=VERDE, bg=BLANCO)
         self.after(9000, lambda: self.lbl_aviso.config(text=""))
 
     # ================================================= pestana DIAS TRABAJADOS
@@ -666,12 +682,20 @@ class App(tk.Tk):
         self.e_tcontrato.grid(row=1, column=3, padx=(0, 16), sticky="w")
         ttk.Label(f, text="en blanco usa la general", style="Rotulo.TLabel").grid(
             row=1, column=4, sticky="w")
+        ttk.Label(f, text="Correo para avisarle cuando marca",
+                  style="Rotulo.TLabel").grid(row=2, column=0, columnspan=3,
+                                              sticky="w", pady=(10, 0))
+        self.e_tcorreo = ttk.Entry(f, width=34, font=(FUENTE, 11))
+        self.e_tcorreo.grid(row=3, column=0, columnspan=2, padx=(0, 16), sticky="w")
+        tk.Label(f, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w", justify="left",
+                 text="Se activa en Configuracion.  Sin correo, igual puede marcar."
+                 ).grid(row=3, column=2, columnspan=3, sticky="w")
 
         self.lbl_calc = tk.Label(p, text="", bg=PAPEL, fg=VERDE, font=(FUENTE, 9),
                                  justify="left", anchor="w")
         self.lbl_calc.pack(fill="x", pady=(8, 0))
         b = ttk.Frame(f)
-        b.grid(row=2, column=0, columnspan=4, sticky="w", pady=(12, 0))
+        b.grid(row=4, column=0, columnspan=5, sticky="w", pady=(14, 0))
         ttk.Button(b, text="Agregar nuevo", style="Principal.TButton",
                    command=self.agregar_trabajador).pack(side="left")
         ttk.Button(b, text="Guardar cambios del seleccionado",
@@ -681,12 +705,12 @@ class App(tk.Tk):
 
         marco = ttk.LabelFrame(p, text=" TRABAJADORES ", padding=10)
         marco.pack(fill="both", expand=True, pady=(14, 0))
-        cols = ("nombre", "vh", "vhe", "contrato", "dias")
+        cols = ("nombre", "vh", "vhe", "contrato", "dias", "correo")
         self.tv_t = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse")
         for c, t, a, al in zip(cols, ["Nombre", "Valor hora", "Valor hora extra",
-                                      "Contrato (h/dia)", "Dias trabajados"],
-                               [200, 120, 140, 130, 120],
-                               ["w", "e", "e", "e", "e"]):
+                                      "Contrato (h/dia)", "Dias trabajados", "Correo"],
+                               [170, 108, 128, 118, 112, 210],
+                               ["w", "e", "e", "e", "e", "w"]):
             self.tv_t.heading(c, text=t)
             self.tv_t.column(c, width=a, anchor=al)
         self.tv_t.pack(fill="both", expand=True)
@@ -737,6 +761,47 @@ class App(tk.Tk):
         self.e_ciudad = ttk.Entry(c, width=20, font=(FUENTE, 11))
         self.e_ciudad.grid(row=1, column=1, padx=(0, 20), sticky="w")
 
+
+        e = ttk.LabelFrame(p, text=" AVISO POR CORREO AL TRABAJADOR ", padding=14)
+        e.pack(fill="x", pady=(14, 0))
+        self.correo_activo = tk.BooleanVar(value=False)
+        ttk.Checkbutton(e, text="Mandarle un correo a cada trabajador cada vez que marca",
+                        variable=self.correo_activo, command=self._refrescar_correo
+                        ).grid(row=0, column=0, columnspan=4, sticky="w")
+        ttk.Label(e, text="Servidor", style="Rotulo.TLabel").grid(
+            row=1, column=0, sticky="w", pady=(10, 0))
+        ttk.Label(e, text="Puerto", style="Rotulo.TLabel").grid(
+            row=1, column=1, sticky="w", pady=(10, 0))
+        ttk.Label(e, text="Cuenta que envia", style="Rotulo.TLabel").grid(
+            row=1, column=2, sticky="w", pady=(10, 0))
+        ttk.Label(e, text="Contrasena de aplicacion", style="Rotulo.TLabel").grid(
+            row=1, column=3, sticky="w", pady=(10, 0))
+        self.e_cservidor = ttk.Entry(e, width=20, font=(FUENTE, 10))
+        self.e_cservidor.grid(row=2, column=0, padx=(0, 12), sticky="w")
+        self.e_cpuerto = ttk.Entry(e, width=7, font=(MONO, 10), justify="right")
+        self.e_cpuerto.grid(row=2, column=1, padx=(0, 12), sticky="w")
+        self.e_cusuario = ttk.Entry(e, width=26, font=(FUENTE, 10))
+        self.e_cusuario.grid(row=2, column=2, padx=(0, 12), sticky="w")
+        self.e_cclave = ttk.Entry(e, width=20, font=(FUENTE, 10), show="•")
+        self.e_cclave.grid(row=2, column=3, sticky="w")
+        tk.Label(e, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w", justify="left",
+                 text="Con Gmail la contrasena NO es la de la cuenta: hay que crear una "
+                      "'contrasena de aplicacion' en la\nconfiguracion de Google. Queda "
+                      "guardada en este PC, y se puede anular desde Google cuando "
+                      "quieras.\nCada trabajador recibe solo sus propias marcas, en la "
+                      "direccion que tenga en la pestana Trabajadores."
+                 ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(10, 0))
+        cf = ttk.Frame(e)
+        cf.grid(row=4, column=0, columnspan=4, sticky="w", pady=(10, 0))
+        self.btn_probar_correo = ttk.Button(cf, text="Enviar correo de prueba",
+                                            command=self.probar_correo)
+        self.btn_probar_correo.pack(side="left")
+        self.btn_reintentar = ttk.Button(cf, text="Reintentar los que no salieron",
+                                         command=self.reintentar_correos)
+        self.btn_reintentar.pack(side="left", padx=8)
+        self.lbl_correo = tk.Label(e, text="", bg=PAPEL, fg=SUAVE, anchor="w",
+                                   font=(FUENTE, 9), justify="left")
+        self.lbl_correo.grid(row=5, column=0, columnspan=4, sticky="we", pady=(8, 0))
 
         pie = ttk.Frame(p)
         pie.pack(fill="x", pady=(16, 0))
@@ -820,10 +885,12 @@ class App(tk.Tk):
             self.datos.agregar_trabajador(self.e_tnombre.get(),
                                           self._numero(self.e_tvalor.get()),
                                           self._numero(self.e_tvalorx.get()),
-                                          self._numero(self.e_tcontrato.get()))
+                                          self._numero(self.e_tcontrato.get()),
+                                          self.e_tcorreo.get())
         except ValueError as e:
             return messagebox.showerror("No se pudo agregar", str(e))
-        for c in (self.e_tnombre, self.e_tvalor, self.e_tvalorx, self.e_tcontrato):
+        for c in (self.e_tnombre, self.e_tvalor, self.e_tvalorx, self.e_tcontrato,
+                  self.e_tcorreo):
             self._set(c, "")
         self.lbl_calc.config(text="")
         self.recargar_todo()
@@ -853,7 +920,8 @@ class App(tk.Tk):
             self.datos.editar_trabajador(int(sel[0]), self.e_tnombre.get(),
                                          self._numero(self.e_tvalor.get()),
                                          self._numero(self.e_tvalorx.get()),
-                                         self._numero(self.e_tcontrato.get()))
+                                         self._numero(self.e_tcontrato.get()),
+                                         self.e_tcorreo.get())
         except ValueError as e:
             return messagebox.showerror("No se pudo guardar", str(e))
         self.recargar_todo()
@@ -885,12 +953,32 @@ class App(tk.Tk):
                 "valor_extra_global": self._numero(self.e_vextra.get()),
                 "negocio": self.e_negocio.get().strip() or N.NEGOCIO_DEF,
                 "ciudad": self.e_ciudad.get().strip() or N.CIUDAD_DEF,
+                "correo_activo": "1" if self.correo_activo.get() else "0",
+                "correo_servidor": self.e_cservidor.get().strip(),
+                "correo_puerto": int(self._numero(self.e_cpuerto.get()) or 587),
+                "correo_usuario": self.e_cusuario.get().strip(),
+                "correo_clave": self.e_cclave.get(),
             }
         except ValueError as e:
             return messagebox.showerror("Dato invalido", str(e))
+        if cambios["correo_activo"] == "1" and not CO.configurado(cambios):
+            return messagebox.showwarning(
+                "Falta la cuenta de correo",
+                "Para avisarle a los trabajadores hay que llenar el servidor, la "
+                "cuenta que envia y su contrasena de aplicacion.\n\nO destilda el "
+                "aviso por correo si no lo vas a usar.")
         self.datos.guardar_config(cambios)
         self.recargar_todo()
-        messagebox.showinfo("Listo", "Configuracion guardada.")
+        sin_correo = [x["nombre"] for x in self.datos.trabajadores()
+                      if not (x.get("correo") or "").strip()]
+        if cambios["correo_activo"] == "1" and sin_correo:
+            messagebox.showinfo(
+                "Guardado, pero ojo",
+                "Estos todavia no tienen correo, asi que no les va a llegar "
+                "nada:\n\n   %s\n\nPonselo en la pestana Trabajadores."
+                % "\n   ".join(sin_correo))
+        else:
+            messagebox.showinfo("Listo", "Configuracion guardada.")
 
     def exportar(self, formato):
         desde, hasta, titulo = self._periodo_r()
@@ -1094,7 +1182,8 @@ class App(tk.Tk):
                 t["nombre"], N.pesos(t["valor_hora"]),
                 N.pesos(t["valor_hora_extra"]) if t["valor_hora_extra"] else "-",
                 N._limpio(t["horas_contrato"]) if t["horas_contrato"] else "general",
-                self.datos.jornadas_de(t["id"])))
+                self.datos.jornadas_de(t["id"]),
+                t.get("correo") or "-"))
 
     def cargar_trabajador_sel(self):
         sel = self.tv_t.selection()
@@ -1108,6 +1197,86 @@ class App(tk.Tk):
                           "%d" % round(t["valor_hora_extra"]) if t["valor_hora_extra"] else "")
                 self._set(self.e_tcontrato,
                           N._limpio(t["horas_contrato"]) if t["horas_contrato"] else "")
+                self._set(self.e_tcorreo, t.get("correo") or "")
+
+    # ----------------------------------------------------- aviso por correo
+    def _refrescar_correo(self):
+        """Los campos del servidor solo sirven si el aviso esta encendido."""
+        estado = "normal" if self.correo_activo.get() else "disabled"
+        for c in (self.e_cservidor, self.e_cpuerto, self.e_cusuario, self.e_cclave):
+            c.config(state=estado)
+        self.btn_probar_correo.config(state=estado)
+        self.btn_reintentar.config(state=estado)
+
+    def probar_correo(self):
+        """
+        Manda un correo de prueba. Va en otro hilo porque un servidor que no
+        responde se demora, y mientras tanto la ventana no se puede congelar.
+        """
+        cfg = dict(self.datos.config())
+        cfg.update({"correo_servidor": self.e_cservidor.get().strip(),
+                    "correo_puerto": self.e_cpuerto.get().strip() or "587",
+                    "correo_usuario": self.e_cusuario.get().strip(),
+                    "correo_clave": self.e_cclave.get(),
+                    "negocio": self.e_negocio.get().strip() or N.NEGOCIO_DEF})
+        self.btn_probar_correo.config(state="disabled", text="Enviando...")
+        self._prueba = {}
+
+        def trabajo():
+            try:
+                self._prueba = {"ok": CO.probar(cfg)}
+            except Exception as e:
+                self._prueba = {"error": str(e)}
+
+        threading.Thread(target=trabajo, daemon=True).start()
+        self.after(300, self._mirar_prueba)
+
+    def _mirar_prueba(self):
+        if not self._prueba:
+            return self.after(300, self._mirar_prueba)
+        self.btn_probar_correo.config(state="normal", text="Enviar correo de prueba")
+        if "ok" in self._prueba:
+            messagebox.showinfo("Correo enviado", self._prueba["ok"])
+        else:
+            messagebox.showerror("No se pudo enviar", self._prueba["error"])
+
+    def reintentar_correos(self):
+        cuantos = self.datos.reintentar_correos()
+        if self.cartero is not None:
+            self.cartero.apurar()
+        messagebox.showinfo(
+            "Listo", "Se van a intentar de nuevo %d correos." % cuantos
+            if cuantos else "No hay correos pendientes.")
+        self._mirar_correos(seguir=False)
+
+    def _mirar_correos(self, seguir=True):
+        """Cada tanto cuenta como va la cola y lo deja escrito en pantalla."""
+        try:
+            c = self.datos.cuenta_correos()
+        except Exception:
+            c = None
+        if c is not None and hasattr(self, "lbl_correo"):
+            if not self.correo_activo.get():
+                texto = "El aviso por correo esta apagado."
+            else:
+                partes = ["%d avisos enviados" % c["enviados"]]
+                if c["esperando"]:
+                    partes.append("%d esperando conexion" % c["esperando"])
+                if c["perdidos"]:
+                    partes.append("%d no se pudieron enviar" % c["perdidos"])
+                texto = "   ·   ".join(partes)
+                error = self.datos.ultimo_error_correo()
+                if error and (c["esperando"] or c["perdidos"]):
+                    texto += "\nUltimo problema: " + error
+            self.lbl_correo.config(text=texto,
+                                   fg=ROJO if c["perdidos"] else SUAVE)
+        if seguir:
+            self.after(15000, self._mirar_correos)
+
+    def cerrar(self):
+        if self.cartero is not None:
+            self.cartero.detener()
+        self.destroy()
 
     def recargar_config(self):
         c = self.datos.config()
@@ -1120,6 +1289,12 @@ class App(tk.Tk):
         self._set(self.e_negocio, c.get("negocio", N.NEGOCIO_DEF))
         self._set(self.e_ciudad, c.get("ciudad", N.CIUDAD_DEF))
         self._refrescar_modo()
+        self.correo_activo.set(c.get("correo_activo", "0") == "1")
+        self._set(self.e_cservidor, c.get("correo_servidor", "smtp.gmail.com"))
+        self._set(self.e_cpuerto, c.get("correo_puerto", "587"))
+        self._set(self.e_cusuario, c.get("correo_usuario", ""))
+        self._set(self.e_cclave, c.get("correo_clave", ""))
+        self._refrescar_correo()
         fecha, cuantos = self.datos.ultimo_respaldo()
         self.lbl_ruta.config(
             text="Los datos se guardan en:  %s\n%d marcas en %d dias registrados.\n%s"

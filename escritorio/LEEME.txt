@@ -76,6 +76,42 @@ COMO SE USA
    listo para imprimir.
 
 
+AVISO POR CORREO CUANDO ALGUIEN MARCA  (opcional)
+-------------------------------------------------
+Cada vez que un trabajador marca, le puede llegar un correo con lo que
+marco, a que hora, y como va su dia. Cada uno recibe solo lo suyo.
+
+Para encenderlo:
+
+1. En TRABAJADORES, escribele el correo a cada uno.
+
+2. En CONFIGURACION, marca "Mandarle un correo a cada trabajador cada
+   vez que marca" y llena:
+
+       Servidor   smtp.gmail.com     (ya viene puesto)
+       Puerto     587                (ya viene puesto)
+       Cuenta     el gmail del negocio
+       Contrasena una CONTRASENA DE APLICACION de ese gmail
+
+   OJO CON LA CONTRASENA: no es la de la cuenta. En Google, con la
+   cuenta abierta, entra a "Gestionar tu cuenta de Google" ->
+   Seguridad -> Contrasenas de aplicaciones, y crea una. Google te da
+   16 letras: esas van aqui. Si algun dia quieres cortarlo, la anulas
+   desde ahi y listo, sin cambiar la contrasena de la cuenta.
+
+3. Presiona "Enviar correo de prueba". Si te llega, quedo andando.
+
+SI NO HAY INTERNET no pasa nada: la marca se registra igual y el aviso
+queda esperando. Sale solo cuando vuelve la conexion. Abajo, en la misma
+pantalla, dice cuantos salieron, cuantos estan esperando y cual fue el
+ultimo problema. El boton "Reintentar los que no salieron" vuelve a
+intentar los que se dieron por perdidos.
+
+La contrasena queda guardada en este computador, en el mismo archivo de
+datos. Por eso conviene que sea una contrasena de aplicacion, que solo
+sirve para enviar correo y se puede anular cuando quieras.
+
+
 UNA SOLA VENTANA
 ----------------
 El programa se abre una sola vez. Si ya esta abierto y le das doble clic
@@ -102,6 +138,6 @@ para liquidaciones de sueldo.
 
 
 ---------------------------------------------------
-Control de Horas  v1.6.1
+Control de Horas  v1.7.0
 Desarrollado por Macoem
 https://github.com/MFNC1996/horas-el-buen-corte

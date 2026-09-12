@@ -25,7 +25,19 @@ CONFIG_DEF = {
     "valor_extra_global": "0",  # $ por hora extra, si modo_extra=fijo
     "negocio": NEGOCIO_DEF,
     "ciudad": CIUDAD_DEF,
+    # Aviso por correo al trabajador cada vez que marca. Apagado mientras no
+    # se llene la cuenta que envia. La clave se guarda aqui, en el PC: por eso
+    # en pantalla se pide una CONTRASENA DE APLICACION y no la de la cuenta.
+    "correo_activo": "0",
+    "correo_servidor": "smtp.gmail.com",
+    "correo_puerto": "587",
+    "correo_usuario": "",       # la casilla desde la que sale el aviso
+    "correo_clave": "",         # contrasena de aplicacion de esa casilla
 }
+
+# Cuantas veces se reintenta un correo antes de darlo por perdido. Con un
+# reintento por minuto, ocho son mas de un rato sin internet.
+INTENTOS_CORREO = 8
 
 # Las cuatro marcas del dia, SIEMPRE en este orden.
 TIPOS = ["entrada", "colacion_inicio", "colacion_fin", "salida"]
@@ -258,6 +270,22 @@ class Datos(object):
         if "horas_contrato" not in columnas:
             c.execute("ALTER TABLE trabajadores ADD COLUMN "
                       "horas_contrato REAL NOT NULL DEFAULT 0")
+        if "correo" not in columnas:
+            c.execute("ALTER TABLE trabajadores ADD COLUMN "
+                      "correo TEXT NOT NULL DEFAULT ''")
+        # Cola de avisos por correo. Se encola al marcar y se envia aparte,
+        # asi una caida de internet no deja a nadie sin poder marcar.
+        c.execute("""CREATE TABLE IF NOT EXISTS correos (
+                       id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                       trabajador_id INTEGER NOT NULL REFERENCES trabajadores(id),
+                       para          TEXT    NOT NULL,
+                       asunto        TEXT    NOT NULL,
+                       cuerpo        TEXT    NOT NULL,
+                       creado_en     TEXT    NOT NULL,
+                       intentos      INTEGER NOT NULL DEFAULT 0,
+                       ultimo_error  TEXT    NOT NULL DEFAULT '',
+                       enviado_en    TEXT    NOT NULL DEFAULT '')""")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_correos ON correos(enviado_en, intentos)")
         c.execute("""CREATE TABLE IF NOT EXISTS config (
                        clave TEXT PRIMARY KEY,
                        valor TEXT NOT NULL)""")
@@ -298,30 +326,36 @@ class Datos(object):
         sql += " ORDER BY orden, id"
         return [dict(f) for f in self.cx.execute(sql)]
 
+    def trabajador(self, tid):
+        f = self.cx.execute("SELECT * FROM trabajadores WHERE id=?", (tid,)).fetchone()
+        return dict(f) if f else None
+
     def agregar_trabajador(self, nombre, valor_hora=0, valor_hora_extra=0,
-                           horas_contrato=0):
+                           horas_contrato=0, correo=""):
         nombre = (nombre or "").strip()
         if not nombre:
             raise ValueError("El nombre no puede estar vacio.")
+        correo = limpiar_correo(correo)
         orden = self.cx.execute(
             "SELECT COALESCE(MAX(orden),0)+1 FROM trabajadores").fetchone()[0]
         cur = self.cx.execute(
             "INSERT INTO trabajadores (nombre, valor_hora, valor_hora_extra, "
-            "horas_contrato, orden) VALUES (?,?,?,?,?)",
+            "horas_contrato, correo, orden) VALUES (?,?,?,?,?,?)",
             (nombre, float(valor_hora or 0), float(valor_hora_extra or 0),
-             float(horas_contrato or 0), orden))
+             float(horas_contrato or 0), correo, orden))
         self.cx.commit()
         return cur.lastrowid
 
     def editar_trabajador(self, tid, nombre, valor_hora, valor_hora_extra=0,
-                          horas_contrato=0):
+                          horas_contrato=0, correo=""):
         nombre = (nombre or "").strip()
         if not nombre:
             raise ValueError("El nombre no puede estar vacio.")
+        correo = limpiar_correo(correo)
         self.cx.execute("UPDATE trabajadores SET nombre=?, valor_hora=?, "
-                        "valor_hora_extra=?, horas_contrato=? WHERE id=?",
+                        "valor_hora_extra=?, horas_contrato=?, correo=? WHERE id=?",
                         (nombre, float(valor_hora or 0), float(valor_hora_extra or 0),
-                         float(horas_contrato or 0), tid))
+                         float(horas_contrato or 0), correo, tid))
         self.cx.commit()
 
     def desactivar_trabajador(self, tid):
@@ -441,8 +475,108 @@ class Datos(object):
             (tid, est["fecha"], est["proxima"], ahora.strftime("%H:%M"),
              origen, ahora.strftime("%Y-%m-%d %H:%M:%S")))
         self.cx.commit()
-        return {"tipo": est["proxima"], "etiqueta": ETIQUETAS[est["proxima"]],
-                "hora": ahora.strftime("%H:%M"), "fecha": est["fecha"]}
+        r = {"tipo": est["proxima"], "etiqueta": ETIQUETAS[est["proxima"]],
+             "hora": ahora.strftime("%H:%M"), "fecha": est["fecha"]}
+        r["correo"] = self.encolar_aviso(tid, r, ahora)
+        return r
+
+    # -- aviso por correo -----------------------------------------------
+    #  Marcar y avisar son cosas distintas a proposito: la marca se guarda
+    #  siempre, y el correo queda en una cola que se vacia cuando hay internet.
+    #  Si el correo falla, el trabajador igual quedo marcado.
+
+    def encolar_aviso(self, tid, marca, ahora=None):
+        """Deja en la cola el aviso de una marca. Devuelve a quien se le avisa."""
+        try:
+            if self.config().get("correo_activo", "0") != "1":
+                return None
+            t = self.trabajador(tid)
+            para = limpiar_correo(t.get("correo") if t else "")
+            if not para:
+                return None
+            asunto, cuerpo = self.texto_aviso(t, marca, ahora)
+            self.encolar_correo(tid, para, asunto, cuerpo, ahora)
+            return para
+        except Exception:
+            # Nada de lo que pase con el correo puede impedir una marcacion.
+            return None
+
+    def texto_aviso(self, trabajador, marca, ahora=None):
+        """Lo que le llega al trabajador: que marco, a que hora, y como va su dia."""
+        cfg = self.config()
+        negocio = cfg.get("negocio", NEGOCIO_DEF)
+        est = self.estado(trabajador["id"], ahora)
+        asunto = "%s a las %s - %s" % (marca["etiqueta"], marca["hora"], negocio)
+        hechas = dict((m["tipo"], m["hora"]) for m in est["marcas"])
+        lineas = ["Hola %s:" % trabajador["nombre"], "",
+                  "Quedo registrada tu marca de %s a las %s del %s."
+                  % (marca["etiqueta"].upper(), marca["hora"],
+                     texto_dia(marca["fecha"])), "", "Tus marcas de ese dia:"]
+        for tipo in TIPOS:
+            lineas.append("   %-20s %s" % (ETIQUETAS[tipo], hechas.get(tipo, "--:--")))
+        if est["completa"]:
+            lineas += ["", "Jornada completa: %s horas trabajadas."
+                           % hhmm_txt(est["horas"])]
+        elif est["horas"]:
+            lineas += ["", "Llevas %s horas trabajadas." % hhmm_txt(est["horas"])]
+        lineas += ["", "--",
+                   "Aviso automatico del Control de Horas de %s." % negocio,
+                   "No respondas a este correo.  Si algo no cuadra, avisale al jefe."]
+        return asunto, "\n".join(lineas)
+
+    def encolar_correo(self, tid, para, asunto, cuerpo, ahora=None):
+        ahora = ahora or datetime.now()
+        cur = self.cx.execute(
+            "INSERT INTO correos (trabajador_id, para, asunto, cuerpo, creado_en) "
+            "VALUES (?,?,?,?,?)",
+            (tid, para, asunto, cuerpo, ahora.strftime("%Y-%m-%d %H:%M:%S")))
+        self.cx.commit()
+        return cur.lastrowid
+
+    def correos_por_enviar(self, limite=20):
+        return [dict(f) for f in self.cx.execute(
+            "SELECT * FROM correos WHERE enviado_en='' AND intentos<? "
+            "ORDER BY id LIMIT ?", (INTENTOS_CORREO, limite))]
+
+    def correo_enviado(self, cid, ahora=None):
+        ahora = ahora or datetime.now()
+        self.cx.execute("UPDATE correos SET enviado_en=?, ultimo_error='' WHERE id=?",
+                        (ahora.strftime("%Y-%m-%d %H:%M:%S"), cid))
+        self.cx.commit()
+
+    def correo_fallo(self, cid, error):
+        self.cx.execute("UPDATE correos SET intentos=intentos+1, ultimo_error=? "
+                        "WHERE id=?", (str(error)[:300], cid))
+        self.cx.commit()
+
+    def cuenta_correos(self):
+        """Como va la cola, para mostrarlo en pantalla."""
+        f = self.cx.execute(
+            "SELECT SUM(enviado_en<>'') enviados, "
+            "       SUM(enviado_en='' AND intentos<?) esperando, "
+            "       SUM(enviado_en='' AND intentos>=?) perdidos FROM correos",
+            (INTENTOS_CORREO, INTENTOS_CORREO)).fetchone()
+        return {"enviados": f["enviados"] or 0, "esperando": f["esperando"] or 0,
+                "perdidos": f["perdidos"] or 0}
+
+    def ultimo_error_correo(self):
+        f = self.cx.execute("SELECT ultimo_error FROM correos WHERE enviado_en='' "
+                            "AND ultimo_error<>'' ORDER BY id DESC LIMIT 1").fetchone()
+        return f["ultimo_error"] if f else ""
+
+    def reintentar_correos(self):
+        """Pone en cero los intentos de los que se dieron por perdidos."""
+        cur = self.cx.execute("UPDATE correos SET intentos=0 WHERE enviado_en=''")
+        self.cx.commit()
+        return cur.rowcount
+
+    def purgar_correos(self, dias=90, hoy=None):
+        """Los avisos ya enviados no se guardan para siempre."""
+        limite = ((hoy or date.today()) - timedelta(days=dias)).isoformat()
+        cur = self.cx.execute("DELETE FROM correos WHERE enviado_en<>'' "
+                              "AND enviado_en<?", (limite,))
+        self.cx.commit()
+        return cur.rowcount
 
     # -- correcciones del administrador ---------------------------------
     def _no_pagado(self, tid, fecha):
@@ -880,6 +1014,27 @@ def valor_hora_desde_sueldo(sueldo_mensual, horas_semanales):
     if sueldo <= 0 or horas <= 0:
         return 0.0
     return round(sueldo / 30.0 * 7.0 / horas)
+
+
+def limpiar_correo(texto):
+    """
+    Deja la direccion lista para guardar, o avisa si no parece una.
+
+    No se trata de validar todo el estandar: basta con atajar los errores de
+    tipeo que dejarian al trabajador sin aviso y sin que nadie se entere.
+    """
+    correo = (texto or "").strip()
+    if not correo:
+        return ""
+    if (correo.count("@") != 1 or " " in correo
+            or correo.startswith("@") or correo.endswith("@")):
+        raise ValueError("'%s' no parece un correo. Tiene que ser algo como "
+                         "nombre@gmail.com" % correo)
+    dominio = correo.split("@")[1]
+    if "." not in dominio or dominio.startswith(".") or dominio.endswith("."):
+        raise ValueError("'%s' no parece un correo: le falta el punto del "
+                         "dominio, como en gmail.com" % correo)
+    return correo
 
 
 def texto_dia(iso):
