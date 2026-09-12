@@ -81,7 +81,7 @@ foreach ($n in @("3-dias-trabajados", "4-pagos-por-persona", "5-trabajadores",
 
 # La configuracion no cabe entera en pantallas chicas: se baja con la rueda
 # del mouse, que es como la baja el usuario, y se fotografia el aviso por correo.
-[Raton]::Rueda(500, 450, -6)
+[Raton]::Rueda(500, 450, -15)
 Start-Sleep -Seconds 2
 Fotografiar "7-correo"
 

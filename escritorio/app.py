@@ -824,7 +824,10 @@ class App(tk.Tk):
         """Una pestana que se puede desplazar si no cabe en la pantalla."""
         marco = ttk.Frame(self)
         self.tabs.add(marco, text=titulo)
-        lienzo = tk.Canvas(marco, bg=PAPEL, highlightthickness=0)
+        # yscrollincrement: cuanto baja cada muesca de la rueda. Sin esto
+        # Tk mueve de a un pixel y bajar la pestana se hace eterno.
+        lienzo = tk.Canvas(marco, bg=PAPEL, highlightthickness=0,
+                           yscrollincrement=30)
         barra = ttk.Scrollbar(marco, orient="vertical", command=lienzo.yview)
         lienzo.configure(yscrollcommand=barra.set)
         barra.pack(side="right", fill="y")
