@@ -46,13 +46,13 @@ COMO SE USA
    Las horas se leen como en un reloj: 10:42 son diez horas con cuarenta
    y dos minutos.
 
-   Las HORAS NORMALES y las HORAS EXTRA se pagan por separado: cada dia
-   tiene dos cuadrados, uno para cada parte. Haz clic en el cuadrado y
-   esa parte queda pagada, con su monto anotado. Sirve para pagarle a
-   alguien solo sus horas extra, por ejemplo.
+   La tabla muestra por separado CUANTO ES EN HORAS NORMALES y CUANTO EN
+   HORAS EXTRA, para que se vea de donde sale el total del dia.
 
-   Un dia con algo pagado ya no se puede corregir ni eliminar: si hay que
-   arreglarlo, primero se le quitan los checks.
+   El cuadrado de la izquierda es el CHECK DE PAGADO. Haz clic y ese dia
+   queda pagado, con su monto anotado. Un dia pagado ya no se puede
+   corregir ni eliminar: si hay que arreglarlo, primero se le quita el
+   check.
 
    Los dias en ambar son dias a los que les falta una marca: no se pueden
    pagar hasta completarlos. Doble clic en la fila para corregirlos.
@@ -66,8 +66,9 @@ COMO SE USA
    en horas extra, cuanto se le debe de cada una, y el total.
 
    Haz clic en una persona y abajo aparecen todos sus dias, pagados y por
-   pagar. Sirve para el que cobra a fin de mes: los botones "Pagar todo",
-   "Solo normales" y "Solo extra" marcan de una vez lo que elijas.
+   pagar, con lo que es en normales y lo que es en extra. Sirve para el
+   que cobra a fin de mes: el boton "Pagar lo pendiente" marca todos sus
+   dias de una vez.
 
    Si alguien tiene dias sin pagar de otro mes, aparece un aviso arriba.
 
@@ -101,6 +102,6 @@ para liquidaciones de sueldo.
 
 
 ---------------------------------------------------
-Control de Horas  v1.6.0
+Control de Horas  v1.6.1
 Desarrollado por Macoem
 https://github.com/MFNC1996/horas-el-buen-corte

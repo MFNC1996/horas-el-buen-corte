@@ -190,7 +190,7 @@ if sal:
           [m for m in v.datos.marcas_de(tid, fecha)
            if m["tipo"] == "salida"][0]["origen"] == "manual")
 
-print("\n--- dias trabajados: horas como reloj y los dos pagos ---")
+print("\n--- dias trabajados: horas como reloj y los montos separados ---")
 v.datos.editar_trabajador(uno, v._trabs[0]["nombre"], 3075)
 for tipo, h in (("entrada", "08:30"), ("colacion_inicio", "13:30"),
                 ("colacion_fin", "13:48"), ("salida", "19:30")):
@@ -199,50 +199,43 @@ v.cb_mes_j.set("Todos"); v.solo_pendientes.set(False); v.recargar_todo()
 fila = "2026-09-07|%d" % uno
 check("el dia aparece en la lista", v.tv_j.exists(fila))
 vals = [str(x) for x in v.tv_j.item(fila)["values"]]
-# columnas: fecha, trabajador, horas, normales, pagar normales, extra, pagar extra, total
-check("10,7 h se ven como 10:42, no con decimales", vals[2] == "10:42")
-check("7:00 normales", vals[3] == "7:00")
-check("3:42 de extra", vals[5] == "3:42")
-check("ofrece pagar las normales", "☐" in vals[4] and "$" in vals[4])
-check("y las extra por separado", "☐" in vals[6] and "$" in vals[6])
-check("muestra el total del dia", vals[7].startswith("$"))
+# columnas: pagado, fecha, trabajador, horas, normales, $normales, extra, $extra, total
+check("10,7 h se ven como 10:42, no con decimales", vals[3] == "10:42")
+check("7:00 normales", vals[4] == "7:00")
+check("muestra cuanto es en normales", vals[5] == "$21.525")
+check("3:42 de extra", vals[6] == "3:42")
+check("muestra cuanto es en extra", vals[7] == "$14.430")
+check("y el total del dia", vals[8] == "$35.955")
+check("las dos partes suman el total", 21525 + 14430 == 35955)
+check("parte sin pagar", "Pagar" in vals[0])
 
-v.cambiar_pagado(fila, "extra")
-check("se pagan solo las extra", v.datos.pago_de(uno, "2026-09-07", "extra") is not None)
-check("las normales siguen sin pagar",
-      v.datos.pago_de(uno, "2026-09-07", "normal") is None)
-vals = [str(x) for x in v.tv_j.item(fila)["values"]]
-check("la columna de extra dice Pagado", "Pagado" in vals[6])
-check("la de normales sigue ofreciendo pagar", "☐" in vals[4])
-check("con una parte pendiente sigue apareciendo en 'solo lo que falta pagar'",
-      (v.solo_pendientes.set(True), v.recargar_jornadas(), v.tv_j.exists(fila))[2])
-
-v.cambiar_pagado(fila, "normal")
-check("ahora tambien las normales",
-      v.datos.pago_de(uno, "2026-09-07", "normal") is not None)
-v.recargar_jornadas()
-check("pagado entero, ya no esta en 'solo lo que falta pagar'", not v.tv_j.exists(fila))
-v.solo_pendientes.set(False); v.recargar_jornadas()
+v.cambiar_pagado(fila)
+check("el clic paga el dia completo",
+      v.datos.pago_de(uno, "2026-09-07", "normal") is not None
+      and v.datos.pago_de(uno, "2026-09-07", "extra") is not None)
+check("y dice Pagado", "Pagado" in str(v.tv_j.item(fila)["values"][0]))
 
 avisos = []
 mb.showinfo = lambda *a, **k: avisos.append(a)
 v.tv_j.selection_set(fila); v.abrir_editor()
-check("un dia con pago no se deja corregir", bool(avisos) and "ya se pago" in str(avisos[-1]))
+check("un dia pagado no se deja corregir", bool(avisos) and "ya se pago" in str(avisos[-1]))
 mb.showinfo = lambda *a, **k: None
 
+v.solo_pendientes.set(True); v.recargar_jornadas()
+check("'solo lo que falta pagar' lo esconde", not v.tv_j.exists(fila))
+v.solo_pendientes.set(False); v.recargar_jornadas()
+
 mb.askyesno = lambda *a, **k: True
-v.cambiar_pagado(fila, "extra")
-check("se puede quitar solo una parte",
-      v.datos.pago_de(uno, "2026-09-07", "extra") is None
-      and v.datos.pago_de(uno, "2026-09-07", "normal") is not None)
-v.cambiar_pagado(fila, "normal")
+v.cambiar_pagado(fila)
+check("se puede quitar el check",
+      v.datos.pago_de(uno, "2026-09-07", "normal") is None)
 mb.askyesno = lambda *a, **k: False
 
 avisos = []
 mb.showwarning = lambda *a, **k: avisos.append(a)
 incompleto = [i for i in v.tv_j.get_children() if "falta" in v.tv_j.item(i)["tags"]]
 if incompleto:
-    v.cambiar_pagado(incompleto[0], "normal")
+    v.cambiar_pagado(incompleto[0])
 check("un dia incompleto no se deja pagar", bool(avisos) and "faltan marcas" in str(avisos[-1]))
 
 print("\n--- eliminar un dia desde Dias trabajados ---")
@@ -263,7 +256,7 @@ check("pregunta mostrando de quien y cuanto",
       bool(preguntas) and "7:00" in str(preguntas[-1]) and "$" in str(preguntas[-1]))
 check("si dice que si, desaparece", not v.tv_j.exists(fila_b))
 mb.askyesno = lambda *a, **k: False
-v.datos.marcar_pagado(uno, "2026-09-07", "normal"); v.recargar_todo()
+v.datos.marcar_pagado(uno, "2026-09-07"); v.recargar_todo()
 avisos = []
 mb.showwarning = lambda *a, **k: avisos.append(a)
 v.tv_j.selection_set("2026-09-07|%d" % uno); v.eliminar_dia()
@@ -278,36 +271,27 @@ check("una fila por persona, sin fila de total",
 check("muestra de entrada los dias de la primera persona", len(v.tv_d.get_children()) >= 1)
 v.tv_r.selection_set(str(uno)); v.recargar_detalle()
 check("muestra los dias de esa persona", len(v.tv_d.get_children()) >= 1)
-check("ofrece pagar todo", "Pagar todo" in v.btn_pagar_todo.cget("text"))
-check("ofrece pagar solo las normales", "Solo normales" in v.btn_pagar_normal.cget("text"))
-check("ofrece pagar solo las extra", "Solo extra" in v.btn_pagar_extra.cget("text"))
+check("ofrece pagar lo pendiente", "Pagar lo pendiente" in v.btn_pagar_todo.cget("text"))
 fila_d = "2026-09-07|%d" % uno
-check("el detalle trae los dos checks",
-      "☐" in str(v.tv_d.item(fila_d)["values"][3])
-      and "☐" in str(v.tv_d.item(fila_d)["values"][5]))
-v.cambiar_pagado(fila_d, "extra")
-check("se paga una parte desde el detalle",
-      v.datos.pago_de(uno, "2026-09-07", "extra") is not None)
-check("y el detalle lo muestra", "Pagado" in str(v.tv_d.item(fila_d)["values"][5]))
+vd = [str(x) for x in v.tv_d.item(fila_d)["values"]]
+check("el detalle trae el check", "Pagar" in vd[0])
+check("y muestra los montos separados", vd[4] == "$21.525" and vd[6] == "$14.430")
+v.cambiar_pagado(fila_d)
+check("se paga el dia desde el detalle",
+      v.datos.pago_de(uno, "2026-09-07", "normal") is not None)
+check("y el detalle lo muestra", "Pagado" in str(v.tv_d.item(fila_d)["values"][0]))
 mb.askyesno = lambda *a, **k: True
-v.cambiar_pagado(fila_d, "extra")
+v.cambiar_pagado(fila_d)
 
-print("\n--- pagarle a alguien solo las horas extra ---")
+print("\n--- pagar lo pendiente de una persona ---")
 v.tv_r.selection_set(str(uno)); v.recargar_detalle()
-antes = [f for f in v._resumen["filas"] if f["id"] == uno][0]
-v.pagar_todo("extra")
+v.pagar_todo()
+mb.askyesno = lambda *a, **k: False
 fila_r = [f for f in v._resumen["filas"] if f["id"] == uno][0]
-check("queda sin extra por pagar", fila_r["por_pagar_extra"] == 0)
-check("pero todavia debe las normales", fila_r["por_pagar_normal"] > 0)
-check("el boton de extra queda apagado",
-      str(v.btn_pagar_extra.cget("state")) == "disabled")
-v.pagar_todo("normal")
-fila_r = [f for f in v._resumen["filas"] if f["id"] == uno][0]
-check("despues las normales, y no se le debe nada", fila_r["por_pagar"] == 0)
-check("y cuenta lo pagado en cada parte",
+check("no se le debe nada", fila_r["por_pagar"] == 0)
+check("el resumen igual muestra lo pagado en cada parte",
       fila_r["pagado_normal"] > 0 and fila_r["pagado_extra"] > 0)
 check("el boton lo dice", v.btn_pagar_todo.cget("text") == "Todo pagado")
-mb.askyesno = lambda *a, **k: False
 
 print("\n--- respaldos ---")
 check("hizo la copia del dia", v.datos.ultimo_respaldo()[0] is not None)

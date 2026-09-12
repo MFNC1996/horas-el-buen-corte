@@ -223,8 +223,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.6.0
-          name: Control de Horas 1.6.0
+          tag_name: v1.6.1
+          name: Control de Horas 1.6.1
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -257,9 +257,9 @@ jobs:
 
             ### Novedades de la 1.6.0
 
-            - Las horas normales y las horas extra se pagan POR SEPARADO. Cada dia
-              tiene dos checks, y en Pagos por persona hay botones para pagarle a
-              alguien solo sus horas extra, solo las normales, o todo.
+            - La tabla muestra por separado cuanto es en horas normales y cuanto en
+              horas extra, ademas del total del dia. El check de pagado sigue siendo
+              uno por dia.
             - Por persona se ve cuanto se le pago y cuanto se le debe en cada parte.
 
             ### Novedades de la 1.5.x

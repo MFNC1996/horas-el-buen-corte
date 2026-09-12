@@ -32,7 +32,7 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 AUTOR = "Macoem"
 # El titulo tambien sirve para encontrar la ventana si ya esta abierta.
 TITULO = "Control de Horas  -  El Buen Corte   |   by %s" % AUTOR
@@ -404,23 +404,23 @@ class App(tk.Tk):
         ttk.Button(f, text="Eliminar dia", command=self.eliminar_dia).pack(side="right")
 
         tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
-                 text="Las horas normales y las extra se pagan por separado: clic en ☐ "
-                      "para marcar cada una.     Doble clic en la fila para corregir "
-                      "las horas."
+                 text="La tabla muestra por separado cuanto es en horas normales y "
+                      "cuanto en extra.     Clic en ☐ Pagar para marcar el dia pagado."
                  ).pack(fill="x", pady=(8, 4))
 
-        cols = ("fecha", "trab", "horas", "norm", "pnorm", "extra", "pextra", "total")
-        titulos = ["Fecha", "Trabajador", "Horas", "H. normales", "PAGAR NORMALES",
-                   "H. extra", "PAGAR EXTRA", "Total del dia"]
-        anchos = [96, 150, 70, 86, 136, 76, 130, 106]
+        cols = ("pagado", "fecha", "trab", "horas", "norm", "pnorm", "extra",
+                "pextra", "total")
+        titulos = ["Pagado", "Fecha", "Trabajador", "Horas", "H. normales",
+                   "$ normales", "H. extra", "$ extra", "TOTAL DEL DIA"]
+        anchos = [96, 92, 138, 64, 84, 92, 68, 86, 106]
         marco = ttk.Frame(p)
         marco.pack(fill="both", expand=True)
         self.tv_j = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse")
         for c, t, a in zip(cols, titulos, anchos):
             self.tv_j.heading(c, text=t)
-            self.tv_j.column(c, width=a, minwidth=60, stretch=(c == "trab"),
-                             anchor="w" if c in ("trab", "pnorm", "pextra") else
-                             ("e" if c == "total" else "center"))
+            self.tv_j.column(c, width=a, minwidth=56, stretch=(c == "trab"),
+                             anchor="w" if c in ("trab", "pagado") else
+                             ("e" if c in ("pnorm", "pextra", "total") else "center"))
         self.tv_j.tag_configure("falta", background=AMBAR_CLARO, foreground=AMBAR)
         self.tv_j.tag_configure("pagado", foreground=VERDE)
         sb = ttk.Scrollbar(marco, orient="vertical", command=self.tv_j.yview)
@@ -433,44 +433,46 @@ class App(tk.Tk):
 
     def _doble_clic_en_dia(self, evento):
         # El doble clic sobre un cuadrado de pagado no abre el corrector.
-        if self.tv_j.identify_column(evento.x) in self.CLIC_JORNADAS:
+        if self.tv_j.identify_column(evento.x) == self.CLIC_JORNADAS:
             return "break"
         self.abrir_editor()
 
-    # Columnas donde se hace clic para pagar cada parte.
-    CLIC_JORNADAS = {"#5": "normal", "#7": "extra"}
-    CLIC_DETALLE = {"#4": "normal", "#6": "extra"}
+    # Columna del check de pagado en cada tabla.
+    CLIC_JORNADAS = "#1"
+    CLIC_DETALLE = "#1"
 
     def _clic_en_dia(self, evento):
-        """Un clic en 'Pagar normales' o 'Pagar extra' cambia ese pago."""
+        """Un clic en la columna Pagado marca o desmarca el dia completo."""
         if self.tv_j.identify_region(evento.x, evento.y) != "cell":
             return
-        concepto = self.CLIC_JORNADAS.get(self.tv_j.identify_column(evento.x))
+        if self.tv_j.identify_column(evento.x) != self.CLIC_JORNADAS:
+            return
         fila = self.tv_j.identify_row(evento.y)
-        if concepto and fila:
-            self.cambiar_pagado(fila, concepto)
+        if fila:
+            self.cambiar_pagado(fila)
             return "break"
 
-    def cambiar_pagado(self, fila, concepto):
-        """Marca o desmarca una de las dos partes del dia."""
+    def cambiar_pagado(self, fila):
+        """Marca o desmarca el dia completo como pagado."""
         fecha, tid = fila.split("|")
         tid = int(tid)
-        pago = self.datos.pago_de(tid, fecha, concepto)
-        nombre = next((t["nombre"] for t in self.datos.trabajadores(False)
-                       if t["id"] == tid), "?")
-        que = N.NOMBRE_CONCEPTO[concepto]
-        if pago:
+        dia = N.dias_con_valor(self.datos, fecha, fecha, tid)
+        if not dia:
+            return
+        dia = dia[0]
+        nombre = dia["nombre"]
+        if dia["pagado_algo"]:
             if not messagebox.askyesno(
                     "Quitar el pago",
-                    "Las %s del %s de %s figuran pagadas (%s, el %s).\n\n"
-                    "¿Quitar el check? Vuelven a quedar por pagar."
-                    % (que, N.texto_dia(fecha), nombre, N.pesos(pago["monto"]),
-                       pago["pagado_en"])):
+                    "El %s de %s figura pagado (%s, el %s).\n\n"
+                    "¿Quitar el check? El dia vuelve a quedar por pagar."
+                    % (N.texto_dia(fecha), nombre, N.pesos(dia["cobrado"]),
+                       dia["pagado_en"])):
                 return
-            self.datos.desmarcar_pagado(tid, fecha, concepto)
+            self.datos.desmarcar_pagado(tid, fecha)
         else:
             try:
-                self.datos.marcar_pagado(tid, fecha, concepto)
+                self.datos.marcar_pagado(tid, fecha)
             except ValueError as e:
                 return messagebox.showwarning("No se puede marcar como pagado", str(e))
         self.recargar_todo()
@@ -542,9 +544,8 @@ class App(tk.Tk):
                    command=lambda: self.exportar("pdf")).pack(side="right")
 
         tk.Label(p, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w",
-                 text="Toca a una persona y abajo aparecen sus dias. Las horas normales "
-                      "y las extra se pagan por separado: clic en ☐, o todo junto con "
-                      "los botones."
+                 text="Toca a una persona y abajo aparecen sus dias, con lo que es en "
+                      "horas normales y lo que es en extra."
                  ).pack(fill="x", pady=(8, 0))
         self.lbl_aviso_r = tk.Label(p, text="", bg=AMBAR_CLARO, fg=AMBAR,
                                     font=(FUENTE, 10, "bold"), anchor="w", padx=12, pady=6)
@@ -571,30 +572,21 @@ class App(tk.Tk):
         self.lbl_det.pack(side="left")
         self.btn_pagar_todo = ttk.Button(cab, text="Pagar todo lo pendiente",
                                          style="Principal.TButton",
-                                         command=lambda: self.pagar_todo("todo"),
-                                         state="disabled")
+                                         command=self.pagar_todo, state="disabled")
         self.btn_pagar_todo.pack(side="right")
-        self.btn_pagar_normal = ttk.Button(cab, text="Solo normales",
-                                           command=lambda: self.pagar_todo("normal"),
-                                           state="disabled")
-        self.btn_pagar_normal.pack(side="right", padx=6)
-        self.btn_pagar_extra = ttk.Button(cab, text="Solo extra",
-                                          command=lambda: self.pagar_todo("extra"),
-                                          state="disabled")
-        self.btn_pagar_extra.pack(side="right")
 
-        cols = ("fecha", "horas", "norm", "pnorm", "extra", "pextra", "valor")
-        titulos = ["Fecha", "Horas", "H. normales", "PAGAR NORMALES", "H. extra",
-                   "PAGAR EXTRA", "Total del dia"]
-        anchos = [110, 74, 96, 136, 84, 130, 106]
+        cols = ("pagado", "fecha", "horas", "norm", "pnorm", "extra", "pextra", "valor")
+        titulos = ["Pagado", "Fecha", "Horas", "H. normales", "$ normales", "H. extra",
+                   "$ extra", "TOTAL DEL DIA"]
+        anchos = [96, 96, 70, 88, 96, 74, 90, 108]
         marco2 = ttk.Frame(p)
         marco2.pack(fill="both", expand=True)
         self.tv_d = ttk.Treeview(marco2, columns=cols, show="headings", selectmode="none")
         for c, t, a in zip(cols, titulos, anchos):
             self.tv_d.heading(c, text=t)
-            self.tv_d.column(c, width=a, minwidth=60, stretch=(c == "fecha"),
-                             anchor="w" if c in ("pnorm", "pextra") else
-                             ("e" if c == "valor" else "center"))
+            self.tv_d.column(c, width=a, minwidth=56, stretch=(c == "fecha"),
+                             anchor="w" if c == "pagado" else
+                             ("e" if c in ("pnorm", "pextra", "valor") else "center"))
         self.tv_d.tag_configure("pagado", foreground=VERDE)
         self.tv_d.tag_configure("falta", background=AMBAR_CLARO, foreground=AMBAR)
         sb2 = ttk.Scrollbar(marco2, orient="vertical", command=self.tv_d.yview)
@@ -604,13 +596,14 @@ class App(tk.Tk):
         self.tv_d.bind("<Button-1>", self._clic_en_detalle)
 
     def _clic_en_detalle(self, evento):
-        """Los mismos dos checks, en los dias de la persona elegida."""
+        """El mismo check de pagado, en los dias de la persona elegida."""
         if self.tv_d.identify_region(evento.x, evento.y) != "cell":
             return
-        concepto = self.CLIC_DETALLE.get(self.tv_d.identify_column(evento.x))
+        if self.tv_d.identify_column(evento.x) != self.CLIC_DETALLE:
+            return
         fila = self.tv_d.identify_row(evento.y)
-        if concepto and fila:
-            self.cambiar_pagado(fila, concepto)
+        if fila:
+            self.cambiar_pagado(fila)
             return "break"
 
     def _periodo_r(self):
@@ -624,26 +617,26 @@ class App(tk.Tk):
                 return "%s-01" % ym, "%s-%02d" % (ym, N.ultimo_dia(a, m)), t
         return None, None, "Todo lo registrado"
 
-    def pagar_todo(self, concepto="todo"):
-        """Paga lo pendiente del periodo: todo, o solo una de las dos partes."""
+    def pagar_todo(self):
+        """Marca como pagados todos los dias pendientes del periodo."""
         sel = self.tv_r.selection()
         if not sel:
             return
         tid = int(sel[0])
         desde, hasta, titulo = self._periodo_r()
         fila = [f for f in self._resumen["filas"] if f["id"] == tid][0]
-        monto = (fila["por_pagar"] if concepto == "todo"
-                 else fila["por_pagar_" + concepto])
-        if monto <= 0:
+        if fila["por_pagar"] <= 0:
             return
-        que = ("todo lo pendiente" if concepto == "todo"
-               else "solo las " + N.NOMBRE_CONCEPTO[concepto])
         if not messagebox.askyesno(
-                "Pagar",
-                "Vas a pagarle a %s %s de %s.\n\nTotal: %s\n\n¿Marcarlo como "
-                "pagado hoy?" % (fila["nombre"], que, titulo.lower(), N.pesos(monto))):
+                "Pagar lo pendiente",
+                "%s tiene %d dias por pagar en %s.\n\n"
+                "Normales: %s\nExtra: %s\nTotal: %s\n\n"
+                "¿Marcarlos como pagados hoy?"
+                % (fila["nombre"], fila["dias_pendientes"], titulo.lower(),
+                   N.pesos(fila["por_pagar_normal"]), N.pesos(fila["por_pagar_extra"]),
+                   N.pesos(fila["por_pagar"]))):
             return
-        self.datos.pagar_pendientes(tid, desde, hasta, concepto)
+        self.datos.pagar_pendientes(tid, desde, hasta)
         self.recargar_todo()
         self.tv_r.selection_set(str(tid))
 
@@ -1008,26 +1001,24 @@ class App(tk.Tk):
             if j["completa"] and j["pagado"]:
                 tags = ("pagado",)
             self.tv_j.insert("", "end", iid=j["id"], tags=tags, values=(
+                self._celda_check(j),
                 "%s %s" % (N.nombre_dia(j["fecha"])[:3], j["fecha"][8:10] + "-" +
                            j["fecha"][5:7]),
                 j["nombre"],
                 N.hhmm_txt(j["horas"]) if j["completa"] else "-",
                 N.hhmm_txt(j["normales"]) if j["completa"] else "-",
-                self._celda_pago(j, "normal"),
+                N.pesos(j["pago_normal"]) if j["completa"] else "-",
                 N.hhmm_txt(j["extra"]) if j["extra"] else "-",
-                self._celda_pago(j, "extra"),
+                N.pesos(j["pago_extra"]) if j["extra"] else "-",
                 N.pesos(j["total"]) if j["completa"] else "falta marcar"))
 
 
     @staticmethod
-    def _celda_pago(dia, concepto):
-        """Lo que muestra la columna de pago de una parte del dia."""
+    def _celda_check(dia):
+        """Lo que muestra la columna del check de pagado."""
         if not dia["completa"]:
             return "  -"
-        if dia["pagado_" + concepto]:
-            return "  ☑  Pagado"
-        monto = dia["pago_" + concepto]
-        return ("  ☐  " + N.pesos(monto)) if monto > 0 else "  -"
+        return "  ☑  Pagado" if dia["pagado"] else "  ☐  Pagar"
 
     def recargar_resumen(self):
         elegido = self.tv_r.selection()
@@ -1067,8 +1058,7 @@ class App(tk.Tk):
         sel = self.tv_r.selection()
         if not sel:
             self.lbl_det.config(text="Elige a una persona para ver sus dias")
-            for b in (self.btn_pagar_todo, self.btn_pagar_normal, self.btn_pagar_extra):
-                b.config(state="disabled")
+            self.btn_pagar_todo.config(state="disabled", text="Pagar todo lo pendiente")
             return
         fila = [f for f in self._resumen["filas"] if f["id"] == int(sel[0])]
         if not fila:
@@ -1080,26 +1070,21 @@ class App(tk.Tk):
             if d["completa"] and d["pagado"]:
                 tags = ("pagado",)
             self.tv_d.insert("", "end", iid=d["id"], tags=tags, values=(
+                self._celda_check(d),
                 "%s %s" % (N.nombre_dia(d["fecha"])[:3], d["fecha"][8:10] + "-" +
                            d["fecha"][5:7]),
                 N.hhmm_txt(d["horas"]) if d["completa"] else "-",
                 N.hhmm_txt(d["normales"]) if d["completa"] else "-",
-                self._celda_pago(d, "normal"),
+                N.pesos(d["pago_normal"]) if d["completa"] else "-",
                 N.hhmm_txt(d["extra"]) if d["extra"] else "-",
-                self._celda_pago(d, "extra"),
+                N.pesos(d["pago_extra"]) if d["extra"] else "-",
                 N.pesos(d["total"]) if d["completa"] else "falta marcar"))
         if fila["por_pagar"]:
             self.btn_pagar_todo.config(
                 state="normal",
-                text="Pagar todo:  %s" % N.pesos(fila["por_pagar"]))
+                text="Pagar lo pendiente:  %s" % N.pesos(fila["por_pagar"]))
         else:
             self.btn_pagar_todo.config(state="disabled", text="Todo pagado")
-        for boton, concepto, nombre in ((self.btn_pagar_normal, "normal", "normales"),
-                                        (self.btn_pagar_extra, "extra", "extra")):
-            falta = fila["por_pagar_" + concepto]
-            boton.config(state="normal" if falta else "disabled",
-                         text=("Solo %s:  %s" % (nombre, N.pesos(falta))) if falta
-                         else "Sin %s" % nombre)
 
     def recargar_trabajadores(self):
         for f in self.tv_t.get_children():
