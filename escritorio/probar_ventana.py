@@ -202,11 +202,13 @@ vals = [str(x) for x in v.tv_j.item(fila)["values"]]
 # columnas: pagado, fecha, trabajador, horas, normales, $normales, extra, $extra, total
 check("10,7 h se ven como 10:42, no con decimales", vals[3] == "10:42")
 check("7:00 normales", vals[4] == "7:00")
-check("muestra cuanto es en normales", vals[5] == "$21.525")
+check("muestra cuanto es en normales", vals[5] == "$21.525")   # 7 x 3.075
 check("3:42 de extra", vals[6] == "3:42")
-check("muestra cuanto es en extra", vals[7] == "$14.430")
-check("y el total del dia", vals[8] == "$35.955")
-check("las dos partes suman el total", 21525 + 14430 == 35955)
+check("muestra cuanto es en extra", vals[7] == "$22.200")       # 3,7 x 6.000
+check("y el total del dia", vals[8] == "$43.725")
+pesos = lambda s: int(s.replace("$", "").replace(".", ""))
+check("las dos partes suman el total, tal como se ven",
+      pesos(vals[5]) + pesos(vals[7]) == pesos(vals[8]))
 check("parte sin pagar", "Pagar" in vals[0])
 
 v.cambiar_pagado(fila)
@@ -275,7 +277,7 @@ check("ofrece pagar lo pendiente", "Pagar lo pendiente" in v.btn_pagar_todo.cget
 fila_d = "2026-09-07|%d" % uno
 vd = [str(x) for x in v.tv_d.item(fila_d)["values"]]
 check("el detalle trae el check", "Pagar" in vd[0])
-check("y muestra los montos separados", vd[4] == "$21.525" and vd[6] == "$14.430")
+check("y muestra los montos separados", vd[4] == "$21.525" and vd[6] == "$22.200")
 v.cambiar_pagado(fila_d)
 check("se paga el dia desde el detalle",
       v.datos.pago_de(uno, "2026-09-07", "normal") is not None)
