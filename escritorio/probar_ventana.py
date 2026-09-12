@@ -324,11 +324,17 @@ v.update_idletasks()
 alto_contenido = v._lienzo_config.bbox("all")[3]
 check("la configuracion se puede bajar cuando no cabe",
       alto_contenido > 0 and v._lienzo_config.cget("yscrollcommand") != "")
-antes = v._lienzo_config.yview()[0]
-v._rueda(type("E", (), {"delta": -120})())
-check("la rueda la baja", v._lienzo_config.yview()[0] > antes
-      or alto_contenido <= v._lienzo_config.winfo_height())
 v._lienzo_config.yview_moveto(0)
+v._rueda(type("E", (), {"delta": -120})())
+una = v._lienzo_config.canvasy(0)
+check("una muesca de la rueda la baja", una > 0)
+v._lienzo_config.yview_moveto(0)
+v._rueda(type("E", (), {"delta": -600})())
+check("y girar rapido la baja mas, no lo mismo",
+      v._lienzo_config.canvasy(0) > una)
+v._lienzo_config.yview_moveto(0)
+v._rueda(type("E", (), {"delta": 120})())
+check("hacia arriba no se pasa del principio", v._lienzo_config.canvasy(0) == 0)
 check("viene apagado", not v.correo_activo.get())
 check("con los campos bloqueados", str(v.e_cservidor.cget("state")) == "disabled")
 v.correo_activo.set(True); v._refrescar_correo()

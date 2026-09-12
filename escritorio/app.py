@@ -857,8 +857,14 @@ class App(tk.Tk):
                 return
         except Exception:
             return
-        # En Windows el delta viene de a 120 por cada muesca de la rueda.
-        lienzo.yview_scroll(-1 if getattr(e, "delta", 0) > 0 else 1, "units")
+        # En Windows el delta viene de a 120 por cada muesca. Hay que mirar
+        # cuanto es y no solo hacia donde va: si se gira rapido llega un solo
+        # evento con varias muescas juntas, y bajaria una sola.
+        delta = getattr(e, "delta", 0)
+        if not delta:
+            return
+        muescas = int(delta / 120) or (1 if delta > 0 else -1)
+        lienzo.yview_scroll(-muescas, "units")
 
     @staticmethod
     def _set(campo, valor):
