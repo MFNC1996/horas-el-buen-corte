@@ -19,6 +19,11 @@ public class Raton {
     mouse_event(0x0002, 0, 0, 0, 0);   // boton izquierdo abajo
     mouse_event(0x0004, 0, 0, 0, 0);   // boton izquierdo arriba
   }
+  public static void Rueda(int x, int y, int muescas) {
+    SetCursorPos(x, y);
+    // 0x0800 = rueda; cada muesca son 120, negativo es hacia abajo
+    mouse_event(0x0800, 0, 0, unchecked((uint)(muescas * 120)), 0);
+  }
 }
 '@
 Add-Type -TypeDefinition $codigo
@@ -73,6 +78,12 @@ foreach ($n in @("3-dias-trabajados", "4-pagos-por-persona", "5-trabajadores",
     Start-Sleep -Seconds 3
     Fotografiar $n
 }
+
+# La configuracion no cabe entera en pantallas chicas: se baja con la rueda
+# del mouse, que es como la baja el usuario, y se fotografia el aviso por correo.
+[Raton]::Rueda(500, 450, -6)
+Start-Sleep -Seconds 2
+Fotografiar "7-correo"
 
 Get-Process -Name ControlDeHoras -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 3

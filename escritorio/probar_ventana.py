@@ -320,6 +320,15 @@ mb.showerror = lambda *a, **k: fallas.append("showerror: " + str(a))
 
 print("\n--- encender el aviso por correo ---")
 v.tabs.select(4)
+v.update_idletasks()
+alto_contenido = v._lienzo_config.bbox("all")[3]
+check("la configuracion se puede bajar cuando no cabe",
+      alto_contenido > 0 and v._lienzo_config.cget("yscrollcommand") != "")
+antes = v._lienzo_config.yview()[0]
+v._rueda(type("E", (), {"delta": -120})())
+check("la rueda la baja", v._lienzo_config.yview()[0] > antes
+      or alto_contenido <= v._lienzo_config.winfo_height())
+v._lienzo_config.yview_moveto(0)
 check("viene apagado", not v.correo_activo.get())
 check("con los campos bloqueados", str(v.e_cservidor.cget("state")) == "disabled")
 v.correo_activo.set(True); v._refrescar_correo()

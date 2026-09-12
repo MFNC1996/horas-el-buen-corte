@@ -718,8 +718,9 @@ class App(tk.Tk):
 
     # =================================================== pestana CONFIGURACION
     def _tab_config(self):
-        p = ttk.Frame(self, padding=14)
-        self.tabs.add(p, text="  Configuracion  ")
+        # Con el aviso por correo esta pestana quedo mas alta que la ventana en
+        # pantallas chicas, asi que va dentro de algo que se puede bajar.
+        p = self._pestana_con_scroll("  Configuracion  ")
 
         a = ttk.LabelFrame(p, text=" JORNADA DEL CONTRATO ", padding=14)
         a.pack(fill="x")
@@ -819,6 +820,43 @@ class App(tk.Tk):
                  font=(FUENTE, 9, "bold"), anchor="w").pack(fill="x", pady=(10, 0))
 
     # ============================================================= utilidades
+    def _pestana_con_scroll(self, titulo):
+        """Una pestana que se puede desplazar si no cabe en la pantalla."""
+        marco = ttk.Frame(self)
+        self.tabs.add(marco, text=titulo)
+        lienzo = tk.Canvas(marco, bg=PAPEL, highlightthickness=0)
+        barra = ttk.Scrollbar(marco, orient="vertical", command=lienzo.yview)
+        lienzo.configure(yscrollcommand=barra.set)
+        barra.pack(side="right", fill="y")
+        lienzo.pack(side="left", fill="both", expand=True)
+        dentro = ttk.Frame(lienzo, padding=14)
+        ventana = lienzo.create_window((0, 0), window=dentro, anchor="nw")
+        dentro.bind("<Configure>",
+                    lambda e: lienzo.configure(scrollregion=lienzo.bbox("all")))
+        lienzo.bind("<Configure>",
+                    lambda e: lienzo.itemconfigure(ventana, width=e.width))
+
+        # La rueda se escucha en toda la ventana: en Windows el evento le llega
+        # al widget con el foco, no al que esta debajo del puntero, y ademas
+        # aqui el marco de adentro tapa al lienzo entero.
+        self._lienzo_config = lienzo
+        self._marco_scroll = marco
+        self.bind_all("<MouseWheel>", self._rueda, add="+")
+        return dentro
+
+    def _rueda(self, e):
+        """Baja la pestana desplazable, si es la que se esta mirando."""
+        lienzo = getattr(self, "_lienzo_config", None)
+        if lienzo is None or not lienzo.winfo_exists():
+            return
+        try:
+            if self.tabs.select() != str(self._marco_scroll):
+                return
+        except Exception:
+            return
+        # En Windows el delta viene de a 120 por cada muesca de la rueda.
+        lienzo.yview_scroll(-1 if getattr(e, "delta", 0) > 0 else 1, "units")
+
     @staticmethod
     def _set(campo, valor):
         campo.delete(0, "end")
