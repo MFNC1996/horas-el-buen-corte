@@ -389,10 +389,59 @@ check("el que no tiene correo marca igual",
       v.datos.marcar(sin)["correo"] is None
       and len(v.datos.correos_por_enviar()) == 0)
 
+print("\n--- el informe del dia para el dueno ---")
+v.tabs.select(4)
+check("viene apagado", not v.informe_activo.get())
+check("con el correo del dueno bloqueado",
+      str(v.e_cjefe.cget("state")) == "disabled")
+v.informe_activo.set(True); v._refrescar_correo()
+check("al encenderlo se habilita", str(v.e_cjefe.cget("state")) == "normal")
+avisos = []
+mb.showwarning = lambda *a, **k: avisos.append(a)
+v.guardar_config()
+check("no deja encenderlo sin el correo del dueno", bool(avisos))
+check("y no queda encendido a medias", v.datos.config()["informe_activo"] == "0")
+mb.showwarning = lambda *a, **k: None
+v._set(v.e_cjefe, "jefe@gmail.com")
+v.guardar_config()
+check("con el correo puesto, lo guarda", v.datos.config()["informe_activo"] == "1")
+check("y guarda a quien va", v.datos.config()["correo_jefe"] == "jefe@gmail.com")
+check("la pantalla dice que no se ha mandado ninguno",
+      "Todavia no" in v.lbl_informe.cget("text"))
+
+hoy = app.date.today().isoformat()
+check("hoy esta por informar", hoy in v.informes_pendientes())
+check("pero al abrir no se ofrece el de hoy",
+      hoy not in v.informes_pendientes(incluir_hoy=False))
+
+print("\n--- cerrar el dia: solo manda si se dice que si ---")
+dias = v.informes_pendientes()
+v.datos.encolar_informe(dias[0])
+check("el informe queda en la cola",
+      any(c["trabajador_id"] is None for c in v.datos.correos_por_enviar()))
+check("y el dia queda dado por informado",
+      v.datos.config()["ultimo_informe"] == dias[0])
+check("ya no vuelve a pedirlo al cerrar", v.informes_pendientes() == [])
+v.recargar_config()
+check("la pantalla ahora dice cual fue el ultimo",
+      "Ultimo informe" in v.lbl_informe.cget("text"))
+mb.askyesno = lambda *a, **k: False
+
 print("\n--- respaldos ---")
 check("hizo la copia del dia", v.datos.ultimo_respaldo()[0] is not None)
 check("no duplica la copia del dia", v.datos.respaldar() is None)
 
-v.destroy()
+print("\n--- al cerrar se pregunta, y si se dice que no, no manda nada ---")
+v.datos.guardar_config({"ultimo_informe": ""})     # como si no se hubiera mandado
+check("hay algo que informar", bool(v.informes_pendientes()))
+antes = len(v.datos.correos_por_enviar())
+preguntas = []
+mb.askyesno = lambda *a, **k: preguntas.append(a) or False
+v.cerrar()
+check("pregunta antes de cerrar", bool(preguntas))
+check("la pregunta dice a que correo va", "jefe@gmail.com" in str(preguntas[-1]))
+check("si se dice que no, no encola nada",
+      len(v.datos.correos_por_enviar()) == antes)
+check("y cierra igual", not v.winfo_exists())
 print("\n" + ("TODO OK" if not fallas else "%d FALLAS: %s" % (len(fallas), fallas)))
 sys.exit(1 if fallas else 0)

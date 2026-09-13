@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import traceback
 from datetime import date, datetime, timedelta
 
@@ -18,7 +19,9 @@ from tkinter import ttk, messagebox, filedialog
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nucleo as N
+import apagado
 import correo as CO
+import informes
 import instancia
 
 # Paleta del logo del local
@@ -34,7 +37,7 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.7.2"
+VERSION = "1.8.0"
 AUTOR = "Macoem"
 # El titulo tambien sirve para encontrar la ventana si ya esta abierta.
 TITULO = "Control de Horas  -  El Buen Corte   |   by %s" % AUTOR
@@ -180,15 +183,24 @@ class App(tk.Tk):
         self._latido()
 
         paso("Dejando el correo listo...", 78)
+        self._cerrando = False
+        self.guardia = None
         try:
             self.datos.purgar_correos()
+            colgados = self.datos.cuenta_correos()["esperando"]
         except Exception:
-            pass
+            colgados = 0
+        if colgados:
+            paso("Mandando %d correos que quedaron pendientes..." % colgados, 84)
         # El envio va en otro hilo: la ventana nunca se queda pegada esperando
         # al servidor de correo.
         self.cartero = CO.arrancar(self.datos.ruta)
         self.protocol("WM_DELETE_WINDOW", self.cerrar)
         self._mirar_correos()
+        # Si Windows se apaga con algo sin mandar, alcanzamos a avisar una vez.
+        self.guardia = apagado.cuidar(
+            self, lambda: bool(self.informes_pendientes()), self.aviso_de_apagado,
+            "Falta mandar el informe del dia del Control de Horas.")
 
         def mostrar():
             if carga is not None and carga.winfo_exists():
@@ -201,6 +213,8 @@ class App(tk.Tk):
                     "Primer uso",
                     "Cree tres trabajadores de ejemplo.\n\nAnda a la pestana "
                     "Trabajadores para ponerles el nombre real y el valor de la hora."))
+            else:
+                self.after(600, self.ofrecer_informes_atrasados)
 
         if carga is None:
             mostrar()                           # nunca dejar la ventana escondida
@@ -805,6 +819,26 @@ class App(tk.Tk):
                                    font=(FUENTE, 9), justify="left")
         self.lbl_correo.grid(row=5, column=0, columnspan=4, sticky="we", pady=(8, 0))
 
+        g = ttk.LabelFrame(p, text=" INFORME DEL DIA PARA EL DUENO ", padding=14)
+        g.pack(fill="x", pady=(14, 0))
+        self.informe_activo = tk.BooleanVar(value=False)
+        ttk.Checkbutton(g, text="Al cerrar el programa, mandarme el informe del dia",
+                        variable=self.informe_activo, command=self._refrescar_correo
+                        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(g, text="Correo del dueno", style="Rotulo.TLabel").grid(
+            row=1, column=0, sticky="w", pady=(10, 0))
+        self.e_cjefe = ttk.Entry(g, width=34, font=(FUENTE, 10))
+        self.e_cjefe.grid(row=2, column=0, padx=(0, 14), sticky="w")
+        tk.Label(g, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w", justify="left",
+                 text="Lleva quien trabajo hoy, cuantas horas, cuanto hay que pagarle y "
+                      "lo que se debe hasta\nhoy, con el Excel y el PDF del mes pegados. "
+                      "Sale una vez al dia, cuando se cierra el\nprograma y se responde "
+                      "que si. Usa la misma cuenta de arriba."
+                 ).grid(row=2, column=1, sticky="w")
+        self.lbl_informe = tk.Label(g, text="", bg=PAPEL, fg=SUAVE, anchor="w",
+                                    font=(FUENTE, 9), justify="left")
+        self.lbl_informe.grid(row=3, column=0, columnspan=2, sticky="we", pady=(8, 0))
+
         pie = ttk.Frame(p)
         pie.pack(fill="x", pady=(16, 0))
         ttk.Button(pie, text="Guardar configuracion", style="Principal.TButton",
@@ -1006,9 +1040,23 @@ class App(tk.Tk):
                 "correo_puerto": int(self._numero(self.e_cpuerto.get()) or 587),
                 "correo_usuario": self.e_cusuario.get().strip(),
                 "correo_clave": self.e_cclave.get(),
+                "informe_activo": "1" if self.informe_activo.get() else "0",
+                "correo_jefe": N.limpiar_correo(self.e_cjefe.get()),
             }
         except ValueError as e:
             return messagebox.showerror("Dato invalido", str(e))
+        if cambios["informe_activo"] == "1" and not cambios["correo_jefe"]:
+            return messagebox.showwarning(
+                "Falta el correo del dueno",
+                "Para mandar el informe del dia hay que escribir a que correo "
+                "llega.")
+        if cambios["informe_activo"] == "1" and not CO.configurado(
+                dict(self.datos.config(), **cambios)):
+            return messagebox.showwarning(
+                "Falta la cuenta de correo",
+                "El informe del dia sale por la misma cuenta de arriba: hay que "
+                "llenar el servidor, la cuenta que envia y su contrasena de "
+                "aplicacion.")
         if cambios["correo_activo"] == "1" and not CO.configurado(cambios):
             return messagebox.showwarning(
                 "Falta la cuenta de correo",
@@ -1249,12 +1297,17 @@ class App(tk.Tk):
 
     # ----------------------------------------------------- aviso por correo
     def _refrescar_correo(self):
-        """Los campos del servidor solo sirven si el aviso esta encendido."""
-        estado = "normal" if self.correo_activo.get() else "disabled"
+        """
+        Los campos del servidor se habilitan si se usa el correo para algo:
+        el aviso al trabajador y el informe del dia salen por la misma cuenta.
+        """
+        estado = ("normal" if (self.correo_activo.get() or self.informe_activo.get())
+                  else "disabled")
         for c in (self.e_cservidor, self.e_cpuerto, self.e_cusuario, self.e_cclave):
             c.config(state=estado)
         self.btn_probar_correo.config(state=estado)
         self.btn_reintentar.config(state=estado)
+        self.e_cjefe.config(state="normal" if self.informe_activo.get() else "disabled")
 
     def probar_correo(self):
         """
@@ -1321,10 +1374,161 @@ class App(tk.Tk):
         if seguir:
             self.after(15000, self._mirar_correos)
 
+    def ofrecer_informes_atrasados(self):
+        """
+        Al abrir: si el computador se apago de golpe y quedaron dias sin
+        informar, se ofrece mandarlos ahora. Dias anteriores solamente: el de
+        hoy se pregunta al cerrar, cuando la jornada ya termino.
+        """
+        dias = self.informes_pendientes(incluir_hoy=False)
+        if not dias:
+            return
+        cuales = ("el informe del %s" % N.texto_dia(dias[0]) if len(dias) == 1
+                  else "los informes de %d dias" % len(dias))
+        if not messagebox.askyesno(
+                "Quedo un informe sin mandar",
+                "No alcanzo a salir %s.\n\nMandarlo ahora?" % cuales,
+                default="yes"):
+            return
+        for fecha in dias:
+            try:
+                a, m = int(fecha[:4]), int(fecha[5:7])
+                self.datos.encolar_informe(fecha, informes.bytes_del_mes(self.datos, a, m))
+            except Exception:
+                pass
+        if self.cartero is not None:
+            self.cartero.apurar()
+        self._mirar_correos(seguir=False)
+
+    # ------------------------------------------------- cerrar el dia y salir
+    def informes_pendientes(self, incluir_hoy=True):
+        """Dias con marcas de los que todavia no sale el informe al dueno."""
+        try:
+            if not self.datos.informe_configurado():
+                return []
+            dias = self.datos.dias_por_informar()
+            if not incluir_hoy:
+                hoy = date.today().isoformat()
+                dias = [f for f in dias if f < hoy]
+            return dias
+        except Exception:
+            return []
+
     def cerrar(self):
+        """
+        Antes de salir, ofrece mandarle el informe del dia al dueno.
+
+        Se pregunta a proposito: si el programa se abre y se cierra varias
+        veces en el dia, el informe sale solo cuando se dice que si.
+        """
+        dias = self.informes_pendientes()
+        if dias and not self._cerrando:
+            jefe = self.datos.config().get("correo_jefe", "")
+            cuales = ("el informe de hoy" if len(dias) == 1
+                      else "los informes de %d dias" % len(dias))
+            if messagebox.askyesno(
+                    "Cerrar el dia",
+                    "Antes de cerrar, %s a:\n\n     %s\n\n"
+                    "Asi el jefe puede revisar las horas y pagar sin venir al "
+                    "local.\n\nMandar %s?" % (cuales, jefe, cuales),
+                    default="yes"):
+                return self.despedida(dias)
+        self.apagar_todo()
+
+    def despedida(self, dias):
+        """La pantalla de carga, pero de salida: arma el informe y lo manda."""
+        self._cerrando = True
+        if self.guardia is not None:
+            self.guardia.soltar()
+        self.withdraw()
+        try:
+            carga = Presentacion(self)
+        except Exception:
+            carga = None
+
+        def paso(texto, avance):
+            if carga is not None and carga.winfo_exists():
+                carga.paso(texto, avance)
+
+        paso("Cerrando el dia...", 8)
+        hoy = date.today()
+        for i, fecha in enumerate(dias):
+            paso("Armando el informe del %s..." % N.texto_dia(fecha),
+                 12 + int(38.0 * i / len(dias)))
+            try:
+                a, m = int(fecha[:4]), int(fecha[5:7])
+                adjuntos = informes.bytes_del_mes(self.datos, a, m)
+            except Exception:
+                adjuntos = []           # sin Excel ni PDF, pero el texto sale
+            try:
+                self.datos.encolar_informe(fecha, adjuntos)
+            except Exception:
+                pass
+        paso("Enviando el correo...", 55)
+        if self.cartero is not None:
+            self.cartero.apurar()
+        quedaron = self._esperar_envio(paso)
+        if quedaron:
+            paso("Sin conexion: queda guardado", 100)
+            if carga is not None and carga.winfo_exists():
+                carga.update()
+            messagebox.showinfo(
+                "No se pudo enviar ahora",
+                "No hay conexion, asi que el informe quedo guardado.\n\n"
+                "Sale solo la proxima vez que abras el programa con internet. "
+                "No hay que volver a pedirlo.")
+        else:
+            paso("Listo, informe enviado", 100)
+            if carga is not None and carga.winfo_exists():
+                carga.update()
+                carga.after(700, self.apagar_todo)
+                return
+        self.apagar_todo()
+
+    def _esperar_envio(self, paso, segundos=25):
+        """Le da un rato al cartero. Devuelve cuantos quedaron sin salir."""
+        vueltas = int(segundos / 0.25)
+        for i in range(vueltas):
+            try:
+                esperando = self.datos.cuenta_correos()["esperando"]
+            except Exception:
+                return 0
+            if not esperando:
+                return 0
+            paso("Enviando el correo...  (%d en la fila)" % esperando,
+                 55 + int(40.0 * i / vueltas))
+            try:
+                self.update()
+            except tk.TclError:
+                return esperando
+            time.sleep(0.25)
+        try:
+            return self.datos.cuenta_correos()["esperando"]
+        except Exception:
+            return 0
+
+    def apagar_todo(self):
+        if self.guardia is not None:
+            self.guardia.soltar()
+            self.guardia = None
         if self.cartero is not None:
             self.cartero.detener()
         self.destroy()
+
+    def aviso_de_apagado(self):
+        """Windows nos pregunto si puede apagar y dijimos que todavia no."""
+        try:
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+        except Exception:
+            pass
+        messagebox.showwarning(
+            "Falta mandar el informe del dia",
+            "Se esta apagando el computador y todavia no sale el informe "
+            "del dia.\n\nCierra el Control de Horas con la X y responde que "
+            "SI, y despues apaga tranquilo.\n\nSi apagas igual, el informe "
+            "no se pierde: sale la proxima vez que abras el programa.")
 
     def recargar_config(self):
         c = self.datos.config()
@@ -1342,7 +1546,17 @@ class App(tk.Tk):
         self._set(self.e_cpuerto, c.get("correo_puerto", "587"))
         self._set(self.e_cusuario, c.get("correo_usuario", ""))
         self._set(self.e_cclave, c.get("correo_clave", ""))
+        self.informe_activo.set(c.get("informe_activo", "0") == "1")
+        self._set(self.e_cjefe, c.get("correo_jefe", ""))
         self._refrescar_correo()
+        ultimo = c.get("ultimo_informe", "")
+        if not self.informe_activo.get():
+            self.lbl_informe.config(text="El informe del dia esta apagado.")
+        elif ultimo:
+            self.lbl_informe.config(
+                text="Ultimo informe mandado: el del %s." % N.texto_dia(ultimo))
+        else:
+            self.lbl_informe.config(text="Todavia no se manda ninguno.")
         fecha, cuantos = self.datos.ultimo_respaldo()
         self.lbl_ruta.config(
             text="Los datos se guardan en:  %s\n%d marcas en %d dias registrados.\n%s"

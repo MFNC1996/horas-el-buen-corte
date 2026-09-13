@@ -39,6 +39,10 @@ CONFIG_DEF = {
     "correo_puerto": "587",
     "correo_usuario": CORREO_DEF,   # la casilla desde la que sale el aviso
     "correo_clave": "",         # contrasena de aplicacion de esa casilla
+    # Informe del dia para el dueno, una vez al dia, al cerrar el programa.
+    "informe_activo": "0",
+    "correo_jefe": "",          # a quien le llega el informe del dia
+    "ultimo_informe": "",       # el ultimo dia que ya se informo (YYYY-MM-DD)
 }
 
 # Cuantas veces se reintenta un correo antes de darlo por perdido. Con un
@@ -283,7 +287,8 @@ class Datos(object):
         # asi una caida de internet no deja a nadie sin poder marcar.
         c.execute("""CREATE TABLE IF NOT EXISTS correos (
                        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                       trabajador_id INTEGER NOT NULL REFERENCES trabajadores(id),
+                       -- vacio en el informe del dia, que no es de un trabajador
+                       trabajador_id INTEGER REFERENCES trabajadores(id),
                        para          TEXT    NOT NULL,
                        asunto        TEXT    NOT NULL,
                        cuerpo        TEXT    NOT NULL,
@@ -292,6 +297,16 @@ class Datos(object):
                        ultimo_error  TEXT    NOT NULL DEFAULT '',
                        enviado_en    TEXT    NOT NULL DEFAULT '')""")
         c.execute("CREATE INDEX IF NOT EXISTS ix_correos ON correos(enviado_en, intentos)")
+        # El informe va con el Excel y el PDF pegados. Se guardan aqui y no en
+        # archivos sueltos porque el programa se puede cerrar antes de enviarlos:
+        # asi el adjunto sigue estando cuando vuelva a abrirse.
+        c.execute("""CREATE TABLE IF NOT EXISTS adjuntos (
+                       id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                       correo_id INTEGER NOT NULL REFERENCES correos(id)
+                                 ON DELETE CASCADE,
+                       nombre    TEXT NOT NULL,
+                       contenido BLOB NOT NULL)""")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_adjuntos ON adjuntos(correo_id)")
         c.execute("""CREATE TABLE IF NOT EXISTS config (
                        clave TEXT PRIMARY KEY,
                        valor TEXT NOT NULL)""")
@@ -302,6 +317,7 @@ class Datos(object):
         c.commit()
         self.migrar_jornadas_a_marcas()
         self._migrar_pagos_en_dos_partes()
+        self._migrar_correos_sin_trabajador()
 
     def cerrar(self):
         self.cx.close()
@@ -532,14 +548,105 @@ class Datos(object):
                    "No respondas a este correo.  Si algo no cuadra, avisale al jefe."]
         return asunto, "\n".join(lineas)
 
-    def encolar_correo(self, tid, para, asunto, cuerpo, ahora=None):
+    # -- informe del dia para el dueno ----------------------------------
+    #  Se manda una vez al dia, al cerrar el programa, para que el jefe pueda
+    #  revisar y pagar desde su casa sin tener que ir al local.
+
+    def informe_configurado(self):
+        cfg = self.config()
+        return (cfg.get("informe_activo", "0") == "1"
+                and bool((cfg.get("correo_jefe") or "").strip()))
+
+    def dias_por_informar(self, hoy=None, maximo=7):
+        """
+        Dias con marcas de los que todavia no se manda informe.
+
+        Son los que van despues del ultimo informado y hasta hoy. Si el
+        computador estuvo apagado varios dias, se toman los ultimos `maximo`
+        para no mandar de golpe un mes entero.
+        """
+        hoy = (hoy or date.today()).isoformat()
+        ultimo = self.config().get("ultimo_informe", "")
+        fechas = [f["fecha"] for f in self.cx.execute(
+            "SELECT DISTINCT fecha FROM marcas WHERE fecha<=? ORDER BY fecha", (hoy,))]
+        faltan = [f for f in fechas if f > ultimo]
+        return faltan[-maximo:]
+
+    def texto_informe(self, fecha):
+        """El informe de un dia, en texto, para el correo del dueno."""
+        cfg = self.config()
+        negocio = cfg.get("negocio", NEGOCIO_DEF)
+        dias = dias_con_valor(self, fecha, fecha)
+        asunto = "Informe del %s - %s" % (texto_dia(fecha), negocio)
+        l = ["Informe del %s." % texto_dia(fecha), "", "EL DIA"]
+        if not dias:
+            l.append("   Nadie marco.")
+        total = por_pagar_dia = 0
+        for d in sorted(dias, key=lambda x: x["nombre"]):
+            if not d["completa"]:
+                l.append("   %-16s falta marcar: %s"
+                         % (d["nombre"], ", ".join(d["faltan"])))
+                continue
+            reparto = "%s normales" % hhmm_txt(d["normales"])
+            if d["extra"]:
+                reparto += " + %s extra" % hhmm_txt(d["extra"])
+            l.append("   %-16s %6s h   %-28s %10s   %s"
+                     % (d["nombre"], hhmm_txt(d["horas"]), reparto,
+                        pesos(d["total"]), "pagado" if d["pagado"] else "POR PAGAR"))
+            total += d["total"]
+            por_pagar_dia += d["por_pagar"]
+        if total:
+            l += ["", "   Total del dia:      %s" % pesos(total),
+                  "   Por pagar del dia:  %s" % pesos(por_pagar_dia)]
+
+        r = resumen_todo(self)
+        deben = [f for f in r["filas"] if f["por_pagar"] > 0]
+        l += ["", "LO QUE SE DEBE HASTA HOY"]
+        if not deben:
+            l.append("   Nada pendiente: esta todo pagado.")
+        for f in sorted(deben, key=lambda x: -x["por_pagar"]):
+            l.append("   %-16s %2d dia%s sin pagar   %10s"
+                     % (f["nombre"], f["dias_pendientes"],
+                        "s" if f["dias_pendientes"] != 1 else " ",
+                        pesos(f["por_pagar"])))
+        if deben:
+            l += ["   %-16s %-19s %10s"
+                  % ("", "TOTAL POR PAGAR", pesos(sum(f["por_pagar"] for f in deben)))]
+        l += ["", "Van pegados el Excel y el PDF del mes, para revisar y pagar.",
+              "", "--", "Control de Horas de %s." % negocio]
+        return asunto, "\n".join(l)
+
+    def encolar_informe(self, fecha, adjuntos=None, ahora=None):
+        """Deja el informe de ese dia en la cola y lo da por informado."""
+        cfg = self.config()
+        para = limpiar_correo(cfg.get("correo_jefe") or "")
+        if not para:
+            return None
+        asunto, cuerpo = self.texto_informe(fecha)
+        self.encolar_correo(None, para, asunto, cuerpo, ahora, adjuntos)
+        ultimo = self.config().get("ultimo_informe", "")
+        if fecha > ultimo:
+            self.guardar_config({"ultimo_informe": fecha})
+        return para
+
+    def encolar_correo(self, tid, para, asunto, cuerpo, ahora=None, adjuntos=None):
+        """`adjuntos` es una lista de (nombre de archivo, contenido en bytes)."""
         ahora = ahora or datetime.now()
         cur = self.cx.execute(
             "INSERT INTO correos (trabajador_id, para, asunto, cuerpo, creado_en) "
             "VALUES (?,?,?,?,?)",
             (tid, para, asunto, cuerpo, ahora.strftime("%Y-%m-%d %H:%M:%S")))
+        cid = cur.lastrowid
+        for nombre, contenido in (adjuntos or []):
+            self.cx.execute("INSERT INTO adjuntos (correo_id, nombre, contenido) "
+                            "VALUES (?,?,?)", (cid, nombre, sqlite3.Binary(contenido)))
         self.cx.commit()
-        return cur.lastrowid
+        return cid
+
+    def adjuntos_de(self, cid):
+        return [(f["nombre"], bytes(f["contenido"])) for f in self.cx.execute(
+            "SELECT nombre, contenido FROM adjuntos WHERE correo_id=? ORDER BY id",
+            (cid,))]
 
     def correos_por_enviar(self, limite=20):
         return [dict(f) for f in self.cx.execute(
@@ -665,6 +772,41 @@ class Datos(object):
     #  Cada dia se paga en dos partes: las horas normales y las extra. Se
     #  pueden pagar juntas o por separado, para poder pagarle a alguien solo
     #  sus horas extra, por ejemplo.
+
+    def _migrar_correos_sin_trabajador(self):
+        """
+        En la 1.7.0 todo correo era de un trabajador y la columna no admitia
+        vacio. El informe del dia no es de nadie, asi que se rehace la tabla.
+        """
+        cols = {f[1]: f for f in self.cx.execute("PRAGMA table_info(correos)")}
+        if not cols or not cols["trabajador_id"][3]:      # [3] = notnull
+            return
+        c = self.cx
+        c.commit()
+        # Sin esto, el RENAME de abajo le cambia a la tabla de adjuntos la tabla
+        # a la que apunta, y al borrar la vieja queda apuntando a la nada.
+        c.execute("PRAGMA foreign_keys=OFF")
+        c.execute("PRAGMA legacy_alter_table=ON")
+        c.execute("ALTER TABLE correos RENAME TO correos_viejos")
+        c.execute("""CREATE TABLE correos (
+                       id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                       trabajador_id INTEGER REFERENCES trabajadores(id),
+                       para          TEXT    NOT NULL,
+                       asunto        TEXT    NOT NULL,
+                       cuerpo        TEXT    NOT NULL,
+                       creado_en     TEXT    NOT NULL,
+                       intentos      INTEGER NOT NULL DEFAULT 0,
+                       ultimo_error  TEXT    NOT NULL DEFAULT '',
+                       enviado_en    TEXT    NOT NULL DEFAULT '')""")
+        c.execute("INSERT INTO correos (id, trabajador_id, para, asunto, cuerpo, "
+                  "creado_en, intentos, ultimo_error, enviado_en) "
+                  "SELECT id, trabajador_id, para, asunto, cuerpo, creado_en, "
+                  "intentos, ultimo_error, enviado_en FROM correos_viejos")
+        c.execute("DROP TABLE correos_viejos")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_correos ON correos(enviado_en, intentos)")
+        c.commit()
+        c.execute("PRAGMA legacy_alter_table=OFF")
+        c.execute("PRAGMA foreign_keys=ON")
 
     def _migrar_pagos_en_dos_partes(self):
         """Pasa los pagos del formato anterior (un solo monto por dia) a dos."""

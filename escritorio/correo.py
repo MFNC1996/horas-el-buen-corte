@@ -69,18 +69,31 @@ def conectar(cfg):
     return s
 
 
-def armar(cfg, para, asunto, cuerpo):
+# Los dos unicos archivos que manda el programa.
+TIPOS = {
+    "pdf":  ("application", "pdf"),
+    "xlsx": ("application",
+             "vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+}
+
+
+def armar(cfg, para, asunto, cuerpo, adjuntos=None):
     m = EmailMessage()
     de = (cfg.get("correo_usuario") or "").strip()
     m["From"] = formataddr((cfg.get("negocio") or N.NEGOCIO_DEF, de))
     m["To"] = para
     m["Subject"] = asunto
     m.set_content(cuerpo)
+    for nombre, contenido in (adjuntos or []):
+        ext = nombre.rsplit(".", 1)[-1].lower()
+        tipo, subtipo = TIPOS.get(ext, ("application", "octet-stream"))
+        m.add_attachment(contenido, maintype=tipo, subtype=subtipo,
+                         filename=nombre)
     return m
 
 
-def enviar_uno(sesion, cfg, para, asunto, cuerpo):
-    sesion.send_message(armar(cfg, para, asunto, cuerpo))
+def enviar_uno(sesion, cfg, para, asunto, cuerpo, adjuntos=None):
+    sesion.send_message(armar(cfg, para, asunto, cuerpo, adjuntos))
 
 
 def vaciar_cola(datos, limite=20):
@@ -91,7 +104,10 @@ def vaciar_cola(datos, limite=20):
     la cola y se vuelve a intentar en la proxima vuelta.
     """
     cfg = datos.config()
-    if cfg.get("correo_activo", "0") != "1" or not configurado(cfg):
+    # No se mira si el aviso al trabajador esta encendido: lo que esta en la
+    # cola ya se decidio mandar (puede ser el informe del dueno, que se
+    # enciende aparte). Basta con que haya cuenta configurada.
+    if not configurado(cfg):
         return 0, 0
     cola = datos.correos_por_enviar(limite)
     if not cola:
@@ -106,7 +122,8 @@ def vaciar_cola(datos, limite=20):
     try:
         for c in cola:
             try:
-                enviar_uno(sesion, cfg, c["para"], c["asunto"], c["cuerpo"])
+                enviar_uno(sesion, cfg, c["para"], c["asunto"], c["cuerpo"],
+                           datos.adjuntos_de(c["id"]))
                 datos.correo_enviado(c["id"])
                 enviados += 1
             except Exception as e:

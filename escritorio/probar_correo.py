@@ -221,6 +221,124 @@ except ValueError as e:
     check("avisa si falta llenar datos", "Falta llenar" in str(e))
 C.conectar = original
 
+print("\n--- informe del dia para el dueno ---")
+import apagado
+
+
+def con_jefe(**extra):
+    d = N.Datos(os.path.join(tempfile.mkdtemp(), "j.sqlite3"))
+    cfg = {"informe_activo": "1", "correo_jefe": "jefe@gmail.com",
+           "correo_usuario": "carniceria@gmail.com", "correo_clave": "clave",
+           "modo_extra": "fijo", "valor_extra_global": "3900"}
+    cfg.update(extra)
+    d.guardar_config(cfg)
+    return d
+
+
+def jornada(d, tid, fecha, entrada="08:30", sale="19:30"):
+    for tipo, h in (("entrada", entrada), ("colacion_inicio", "13:30"),
+                    ("colacion_fin", "14:30"), ("salida", sale)):
+        d.agregar_marca(tid, fecha, tipo, h)
+
+
+d = con_jefe()
+ana = d.agregar_trabajador("Ana Soto", 3075)
+juan = d.agregar_trabajador("Juan Perez", 3075)
+jornada(d, ana, "2026-09-10", sale="16:30")     # 7:00, sin extra
+jornada(d, juan, "2026-09-10")                  # 10:00 = 7 + 3 extra
+d.agregar_marca(ana, "2026-09-11", "entrada", "08:30")   # dia a medias
+check("esta configurado", d.informe_configurado())
+check("los dos dias estan por informar",
+      d.dias_por_informar(N.date(2026, 9, 11)) == ["2026-09-10", "2026-09-11"])
+
+asunto, cuerpo = d.texto_informe("2026-09-10")
+check("el asunto dice de que dia es", "jueves 10 de septiembre" in asunto)
+check("y de que negocio", N.NEGOCIO_DEF in asunto)
+check("lista a los que trabajaron", "Ana Soto" in cuerpo and "Juan Perez" in cuerpo)
+check("con sus horas como reloj", "10:00 h" in cuerpo)
+check("separando normales y extra", "7:00 normales + 3:00 extra" in cuerpo)
+check("dice cuanto vale el dia", "$33.225" in cuerpo)
+check("y el total del dia", "Total del dia:" in cuerpo and "$54.750" in cuerpo)
+check("marca lo que esta por pagar", "POR PAGAR" in cuerpo)
+check("resume lo que se debe hasta hoy", "LO QUE SE DEBE HASTA HOY" in cuerpo)
+check("con el total a pagar", "TOTAL POR PAGAR" in cuerpo)
+check("avisa que van los archivos pegados", "Van pegados el Excel y el PDF" in cuerpo)
+
+cuerpo_11 = d.texto_informe("2026-09-11")[1]
+check("el dia a medias avisa que falta marcar",
+      "falta marcar" in cuerpo_11 and "Salida" in cuerpo_11)
+
+d.marcar_pagado(juan, "2026-09-10")
+cuerpo2 = d.texto_informe("2026-09-10")[1]
+check("lo pagado sale como pagado", "pagado" in cuerpo2)
+check("y ya no se cuenta en lo que se debe",
+      "Juan Perez" not in cuerpo2.split("LO QUE SE DEBE HASTA HOY")[1])
+
+print("\n--- se manda una sola vez al dia ---")
+d = con_jefe()
+ana = d.agregar_trabajador("Ana Soto", 3075)
+jornada(d, ana, "2026-09-10", sale="16:30")
+check("hay uno por informar", d.dias_por_informar(N.date(2026, 9, 10)) == ["2026-09-10"])
+check("se encola al jefe",
+      d.encolar_informe("2026-09-10") == "jefe@gmail.com")
+check("queda anotado como informado", d.config()["ultimo_informe"] == "2026-09-10")
+check("y ya no pide mandarlo de nuevo",
+      d.dias_por_informar(N.date(2026, 9, 10)) == [])
+jornada(d, ana, "2026-09-11", sale="16:30")
+check("al dia siguiente si", d.dias_por_informar(N.date(2026, 9, 11)) == ["2026-09-11"])
+check("el informe no es de ningun trabajador",
+      d.correos_por_enviar()[0]["trabajador_id"] is None)
+check("si no hay correo del dueno, no se encola nada",
+      con_jefe(correo_jefe="").encolar_informe("2026-09-10") is None)
+check("apagado, no esta configurado",
+      not con_jefe(informe_activo="0").informe_configurado())
+
+print("\n--- si el computador estuvo apagado varios dias ---")
+d = con_jefe()
+ana = d.agregar_trabajador("Ana Soto", 3075)
+for n in range(1, 13):
+    jornada(d, ana, "2026-09-%02d" % n, sale="16:30")
+pendientes = d.dias_por_informar(N.date(2026, 9, 12))
+check("no manda doce correos de golpe", len(pendientes) == 7)
+check("manda los ultimos siete", pendientes[-1] == "2026-09-12")
+
+print("\n--- el informe viaja con el Excel y el PDF ---")
+import informes
+d = con_jefe()
+ana = d.agregar_trabajador("Ana Soto", 3075)
+jornada(d, ana, "2026-09-10")
+adj = informes.bytes_del_mes(d, 2026, 9)
+check("se arma el Excel y el PDF", len(adj) == 2)
+check("el Excel tiene contenido", adj[0][0].endswith(".xlsx") and len(adj[0][1]) > 4000)
+check("el PDF tambien", adj[1][0].endswith(".pdf") and len(adj[1][1]) > 2000)
+check("un mes sin nada no arma archivos", informes.bytes_del_mes(d, 2025, 1) == [])
+d.encolar_informe("2026-09-10", adj)
+cid = d.correos_por_enviar()[0]["id"]
+check("los adjuntos quedan guardados con el correo",
+      [n for n, _ in d.adjuntos_de(cid)] == [a[0] for a in adj])
+sesion = SesionFalsa()
+C.conectar = con_servidor(sesion)
+C.vaciar_cola(d)
+m = sesion.enviados[0]
+pegados = [(p.get_filename(), p.get_content_type()) for p in m.iter_attachments()]
+check("y llegan pegados al correo", len(pegados) == 2)
+check("el Excel como Excel", "spreadsheetml" in pegados[0][1])
+check("el PDF como PDF", pegados[1][1] == "application/pdf")
+check("va al correo del dueno", m["To"] == "jefe@gmail.com")
+check("sale aunque el aviso al trabajador este apagado",
+      d.config()["correo_activo"] == "0")
+C.conectar = original
+
+print("\n--- avisar antes de que Windows apague ---")
+check("con algo pendiente, el primer intento se bloquea",
+      apagado.decidir(apagado.WM_QUERYENDSESSION, True, False) == apagado.BLOQUEAR)
+check("el segundo intento deja apagar",
+      apagado.decidir(apagado.WM_QUERYENDSESSION, True, True) == apagado.SEGUIR)
+check("sin nada pendiente no molesta",
+      apagado.decidir(apagado.WM_QUERYENDSESSION, False, False) == apagado.SEGUIR)
+check("los demas mensajes pasan de largo",
+      apagado.decidir(0x0005, True, False) == apagado.SEGUIR)
+
 print("\n--- limpieza de los viejos ---")
 d, tid = base()
 d.marcar(tid, datetime(2026, 9, 14, 8, 30))

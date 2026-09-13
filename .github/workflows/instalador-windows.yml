@@ -224,8 +224,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.7.2
-          name: Control de Horas 1.7.2
+          tag_name: v1.8.0
+          name: Control de Horas 1.8.0
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -255,6 +255,21 @@ jobs:
             La semana acumula esos valores y cierra el dia de pago que elijas
             (por defecto el sabado), asi que el total que muestra es justo lo que
             hay que pagar. Sin calculadora.
+
+            ### Novedad de la 1.8.0: informe del dia al dueno
+
+            Al cerrar el programa pregunta si mandar el informe del dia por
+            correo. Lleva quien trabajo, cuantas horas, cuanto hay que pagarle y
+            todo lo que se debe hasta ese dia, con el Excel y el PDF del mes
+            pegados. Asi el jefe revisa y paga desde su casa.
+
+            Sale UNA VEZ AL DIA y solo si se responde que si, para que abrir y
+            cerrar el programa diez veces no mande diez correos. Mientras se
+            manda aparece la misma pantalla del logo, de salida.
+
+            Si el computador se apaga con el informe sin mandar, Windows avisa
+            una vez antes de apagar. Y si se apaga igual, no se pierde: al abrir
+            de nuevo el programa ofrece mandarlo.
 
             ### Novedad de la 1.7.1 y 1.7.2
 

@@ -128,6 +128,50 @@ datos. Por eso conviene que sea una contrasena de aplicacion, que solo
 sirve para enviar correo y se puede anular cuando quieras.
 
 
+EL INFORME DEL DIA PARA EL DUENO  (opcional)
+--------------------------------------------
+Al cerrar el programa pregunta:
+
+    "Antes de cerrar, el informe de hoy a jefe@correo.com. Mandarlo?"
+
+Si se responde que SI, aparece la pantalla del logo diciendo que esta
+cerrando el dia, y sale un correo con:
+
+  - Quien trabajo hoy, cuantas horas, cuantas normales y cuantas extra.
+  - Cuanto vale el dia de cada uno y si esta pagado o por pagar.
+  - Todo lo que se debe hasta hoy, por persona y el total.
+  - El Excel y el PDF del mes pegados, para revisar y pagar.
+
+Asi el dueno puede ver las horas y sacar cuentas desde su casa, sin
+tener que venir al local.
+
+SALE UNA VEZ AL DIA. Si el programa se abre y se cierra diez veces, no
+manda diez correos: se manda cuando se responde que si, y despues ya no
+vuelve a preguntar por ese dia.
+
+Si se responde que NO, no se manda nada y vuelve a preguntar la proxima
+vez que se cierre.
+
+Para encenderlo: en CONFIGURACION, mas abajo del aviso a los
+trabajadores, marca "Al cerrar el programa, mandarme el informe del dia"
+y escribe el correo del dueno. Usa la misma cuenta que envia, asi que
+hay que tener llena la contrasena de aplicacion.
+
+
+SI APAGAN EL COMPUTADOR SIN CERRAR EL PROGRAMA
+----------------------------------------------
+Windows avisa una vez: aparece una pantalla diciendo que el Control de
+Horas esta esperando, con el motivo. Ahi conviene volver, cerrar el
+programa con la X y responder que si.
+
+Si aun asi se apaga a la fuerza (el boton "Apagar de todas formas", o
+manteniendo apretado el boton del computador), NO SE PIERDE NADA: la
+proxima vez que se abra el programa pregunta si mandar el informe que
+quedo pendiente.
+
+Lo mismo con un corte de luz.
+
+
 UNA SOLA VENTANA
 ----------------
 El programa se abre una sola vez. Si ya esta abierto y le das doble clic
@@ -157,6 +201,6 @@ para liquidaciones de sueldo.
 
 
 ---------------------------------------------------
-Control de Horas  v1.7.2
+Control de Horas  v1.8.0
 Desarrollado por Macoem
 https://github.com/MFNC1996/horas-el-buen-corte

@@ -251,3 +251,36 @@ def a_pdf(r, ruta):
         hist.append(Paragraph("&bull; " + linea, nota))
     doc.build(hist)
     return ruta
+
+
+# ------------------------------------------------ para mandarlo por correo
+def bytes_del_mes(datos, anio, mes):
+    """
+    El informe del mes en Excel y PDF, en memoria, para pegarlo a un correo.
+
+    Devuelve [(nombre de archivo, contenido)]. Si el mes no tiene nada
+    registrado, devuelve una lista vacia.
+    """
+    import os
+    import tempfile
+    import nucleo as N
+
+    r = N.resumen_mensual(datos, anio, mes)
+    if not r["filas"]:
+        return []
+    base = "informe-%04d-%02d" % (anio, mes)
+    carpeta = tempfile.mkdtemp()
+    salida = []
+    try:
+        for ext, escribir in (("xlsx", a_excel), ("pdf", a_pdf)):
+            ruta = os.path.join(carpeta, "%s.%s" % (base, ext))
+            escribir(r, ruta)
+            with open(ruta, "rb") as f:
+                salida.append(("%s.%s" % (base, ext), f.read()))
+            os.remove(ruta)
+    finally:
+        try:
+            os.rmdir(carpeta)
+        except OSError:
+            pass
+    return salida

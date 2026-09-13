@@ -124,6 +124,23 @@ cola que se vacía en otro hilo ([escritorio/correo.py](escritorio/correo.py)). 
 internet nadie se queda sin marcar; el aviso sale cuando vuelve la conexión, y
 después de 8 intentos deja de insistir y queda a la vista en Configuración.
 
+### El informe del día
+Al cerrar el programa pregunta si mandarle al dueño el informe del día: quién
+trabajó, cuántas horas, cuánto hay que pagarle, y todo lo que se debe hasta ese
+día, con el Excel y el PDF del mes pegados. Mientras se manda aparece la misma
+pantalla del logo, de salida.
+
+**Sale una vez al día y solo si se responde que sí**, para que abrir y cerrar el
+programa varias veces no mande varios correos. Los adjuntos se guardan en la base
+junto al correo, no en archivos temporales, porque el programa puede cerrarse antes
+de alcanzar a enviarlo.
+
+Si Windows se está apagando con el informe pendiente, la aplicación contesta una
+vez que todavía no (`WM_QUERYENDSESSION`, en
+[escritorio/apagado.py](escritorio/apagado.py)) y Windows muestra el motivo. **Un
+apagado forzado no lo detiene nadie**, así que la red de seguridad real es otra: al
+abrir, si quedó un día sin informar, ofrece mandarlo.
+
 ---
 
 ## Dónde quedan los datos
@@ -152,6 +169,7 @@ python escritorio/app.py
 | `escritorio/correo.py` | Manda los avisos de la cola. Separado del núcleo a propósito. |
 | `escritorio/informes.py` | Informe mensual en Excel y PDF. |
 | `escritorio/instancia.py` | Deja abrir el programa una sola vez. |
+| `escritorio/apagado.py` | Aviso antes de que Windows apague con algo sin mandar. |
 | `escritorio/imagen_marca.py` | El logo, generado; no se edita a mano. |
 | `escritorio/empaquetado/` | Receta de PyInstaller, script de Inno Setup, ícono y capturas. |
 
@@ -162,8 +180,8 @@ Las pruebas no necesitan Windows ni pantalla, salvo la última:
 | `probar_nucleo.py` | 39 · cálculos de horas y de plata |
 | `probar_marcas.py` | 70 · las cuatro marcas, el orden y el día laboral |
 | `probar_pagos.py` | 69 · pagos, montos congelados y días bloqueados |
-| `probar_correo.py` | 61 · la cola de avisos, con un servidor SMTP de mentira |
-| `probar_ventana.py` | 108 · arma la ventana entera y revisa sus controles, sin mostrarla |
+| `probar_correo.py` | 101 · la cola, el informe del día y los adjuntos, con un servidor SMTP de mentira |
+| `probar_ventana.py` | 125 · arma la ventana entera y revisa sus controles, sin mostrarla |
 
 ### Cómo se construye el instalador
 `.github/workflows/instalador-windows.yml` lo arma en una máquina Windows de
