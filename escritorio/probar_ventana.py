@@ -416,11 +416,12 @@ check("pero al abrir no se ofrece el de hoy",
 
 print("\n--- cerrar el dia: solo manda si se dice que si ---")
 dias = v.informes_pendientes()
-v.datos.encolar_informe(dias[0])
+for f in dias:
+    v.datos.encolar_informe(f)
 check("el informe queda en la cola",
       any(c["trabajador_id"] is None for c in v.datos.correos_por_enviar()))
 check("y el dia queda dado por informado",
-      v.datos.config()["ultimo_informe"] == dias[0])
+      v.datos.config()["ultimo_informe"] == dias[-1])
 check("ya no vuelve a pedirlo al cerrar", v.informes_pendientes() == [])
 v.recargar_config()
 check("la pantalla ahora dice cual fue el ultimo",
@@ -442,6 +443,10 @@ check("pregunta antes de cerrar", bool(preguntas))
 check("la pregunta dice a que correo va", "jefe@gmail.com" in str(preguntas[-1]))
 check("si se dice que no, no encola nada",
       len(v.datos.correos_por_enviar()) == antes)
-check("y cierra igual", not v.winfo_exists())
+try:                      # la ventana principal es la raiz: al cerrarla se
+    vive = bool(v.winfo_exists())   # lleva el interprete de Tk entero
+except app.tk.TclError:
+    vive = False
+check("y cierra igual", not vive)
 print("\n" + ("TODO OK" if not fallas else "%d FALLAS: %s" % (len(fallas), fallas)))
 sys.exit(1 if fallas else 0)
