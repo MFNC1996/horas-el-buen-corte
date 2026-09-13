@@ -34,7 +34,7 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 AUTOR = "Macoem"
 # El titulo tambien sirve para encontrar la ventana si ya esta abierta.
 TITULO = "Control de Horas  -  El Buen Corte   |   by %s" % AUTOR
@@ -781,7 +781,8 @@ class App(tk.Tk):
         self.e_cservidor.grid(row=2, column=0, padx=(0, 12), sticky="w")
         self.e_cpuerto = ttk.Entry(e, width=7, font=(MONO, 10), justify="right")
         self.e_cpuerto.grid(row=2, column=1, padx=(0, 12), sticky="w")
-        self.e_cusuario = ttk.Entry(e, width=26, font=(FUENTE, 10))
+        # 34 para que quepa entera marcacion.elbuencorte@gmail.com
+        self.e_cusuario = ttk.Entry(e, width=34, font=(FUENTE, 10))
         self.e_cusuario.grid(row=2, column=2, padx=(0, 12), sticky="w")
         self.e_cclave = ttk.Entry(e, width=20, font=(FUENTE, 10), show="•")
         self.e_cclave.grid(row=2, column=3, sticky="w")

@@ -224,8 +224,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.7.1
-          name: Control de Horas 1.7.1
+          tag_name: v1.7.2
+          name: Control de Horas 1.7.2
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -256,7 +256,7 @@ jobs:
             (por defecto el sabado), asi que el total que muestra es justo lo que
             hay que pagar. Sin calculadora.
 
-            ### Novedad de la 1.7.1
+            ### Novedad de la 1.7.1 y 1.7.2
 
             La casilla que envia los avisos, marcacion.elbuencorte@gmail.com, ya
             viene escrita en Configuracion. Lo unico que se escribe a mano es su

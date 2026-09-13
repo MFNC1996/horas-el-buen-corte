@@ -344,6 +344,8 @@ check("Gmail viene puesto de fabrica", v.e_cservidor.get() == "smtp.gmail.com")
 check("con su puerto", v.e_cpuerto.get() == "587")
 check("y la casilla del negocio ya viene escrita",
       v.e_cusuario.get() == "marcacion.elbuencorte@gmail.com")
+check("el campo es lo bastante ancho para verla entera",
+      int(v.e_cusuario.cget("width")) >= len("marcacion.elbuencorte@gmail.com"))
 check("la contrasena no viene de ninguna parte", v.e_cclave.get() == "")
 
 avisos = []

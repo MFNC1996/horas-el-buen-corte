@@ -157,6 +157,6 @@ para liquidaciones de sueldo.
 
 
 ---------------------------------------------------
-Control de Horas  v1.7.1
+Control de Horas  v1.7.2
 Desarrollado por Macoem
 https://github.com/MFNC1996/horas-el-buen-corte
