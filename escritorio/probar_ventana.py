@@ -448,5 +448,24 @@ try:                      # la ventana principal es la raiz: al cerrarla se
 except app.tk.TclError:
     vive = False
 check("y cierra igual", not vive)
+print("\n--- y si se dice que si, arma el informe y se despide ---")
+v = app.App(presentacion=False)      # la anterior quedo cerrada
+v.withdraw()
+v.datos.guardar_config({"ultimo_informe": ""})
+dias = v.informes_pendientes()
+antes = len(v.datos.correos_por_enviar())
+# El hilo que envia no corre en las pruebas, asi que no hay nada que esperar.
+v._esperar_envio = lambda paso, segundos=25: 0
+mb.askyesno = lambda *a, **k: True
+v.cerrar()
+ahora = v.datos.correos_por_enviar()
+check("encola el informe", len(ahora) > antes)
+check("al correo del dueno", ahora[-1]["para"] == "jefe@gmail.com")
+check("con el Excel y el PDF pegados",
+      len(v.datos.adjuntos_de(ahora[-1]["id"])) == 2)
+check("y da el dia por informado",
+      v.datos.config()["ultimo_informe"] == dias[-1])
+v.apagar_todo()
+
 print("\n" + ("TODO OK" if not fallas else "%d FALLAS: %s" % (len(fallas), fallas)))
 sys.exit(1 if fallas else 0)
