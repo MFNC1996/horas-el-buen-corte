@@ -61,6 +61,32 @@ siempre suman las horas del mes, que es lo que tiene que cuadrar en una liquidac
 
 ---
 
+## El aviso por correo
+
+Cada marcación le manda un correo al trabajador con qué marcó, a qué hora y cómo
+va su día. Se enciende en **Configuración** y el correo de cada persona se pone en
+**Trabajadores**.
+
+**La cuenta que envía es `marcacion.elbuencorte@gmail.com`**, y viene escrita por
+defecto en la aplicación (`CORREO_DEF`, en [escritorio/nucleo.py](escritorio/nucleo.py)).
+
+**La contraseña no está acá ni en el ejecutable.** Gmail pide una *contraseña de
+aplicación* (no la de la cuenta, y exige tener activada la verificación en 2 pasos).
+Se escribe una sola vez en Configuración, en el PC del local, y queda guardada en
+`horas.sqlite3`, que no viaja con el programa. Este repositorio es público: una clave
+escrita en el código quedaría a la vista de cualquiera, y GitHub y Google las anulan
+solas cuando las detectan.
+
+Como la configuración vive en AppData, la contraseña sobrevive a las
+actualizaciones: solo hay que volver a escribirla si se instala en un PC nuevo.
+
+Marcar y avisar están separados: la marca se guarda siempre y el correo queda en una
+cola que se vacía en otro hilo ([escritorio/correo.py](escritorio/correo.py)). Sin
+internet nadie se queda sin marcar; el aviso sale cuando vuelve la conexión, y
+después de 8 intentos deja de insistir y queda a la vista en Configuración.
+
+---
+
 ## Dónde quedan los datos
 
 ```

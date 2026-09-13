@@ -76,6 +76,22 @@ COMO SE USA
    listo para imprimir.
 
 
+LA CUENTA QUE ENVIA LOS AVISOS
+------------------------------
+    marcacion.elbuencorte@gmail.com
+
+Esa casilla es del negocio y sirve solo para mandar los avisos. Ya viene
+escrita en Configuracion, no hay que acordarse de ella.
+
+Lo unico que hay que escribir a mano, UNA SOLA VEZ, es su contrasena de
+aplicacion (ver mas abajo). Queda guardada en este computador y sobrevive
+a las actualizaciones, asi que no se vuelve a pedir. Si alguna vez hay
+que instalar en un computador nuevo, ahi si se escribe de nuevo.
+
+La contrasena NO esta en el programa ni en internet: solo en el archivo
+de datos de este PC.
+
+
 AVISO POR CORREO CUANDO ALGUIEN MARCA  (opcional)
 -------------------------------------------------
 Cada vez que un trabajador marca, le puede llegar un correo con lo que
@@ -90,8 +106,8 @@ Para encenderlo:
 
        Servidor   smtp.gmail.com     (ya viene puesto)
        Puerto     587                (ya viene puesto)
-       Cuenta     el gmail del negocio
-       Contrasena una CONTRASENA DE APLICACION de ese gmail
+       Cuenta     marcacion.elbuencorte@gmail.com   (ya viene puesta)
+       Contrasena una CONTRASENA DE APLICACION de esa cuenta
 
    OJO CON LA CONTRASENA: no es la de la cuenta. En Google, con la
    cuenta abierta, entra a "Gestionar tu cuenta de Google" ->
@@ -129,6 +145,9 @@ El boton "Abrir carpeta de datos", en Configuracion, te lleva ahi.
 
 RESPALDO: copia ese archivo a un pendrive de vez en cuando.
 
+OJO: ese archivo tambien lleva adentro la contrasena de aplicacion del
+correo. Guarda el pendrive donde guardas las cosas del negocio.
+
 
 UN AVISO
 --------
@@ -138,6 +157,6 @@ para liquidaciones de sueldo.
 
 
 ---------------------------------------------------
-Control de Horas  v1.7.0
+Control de Horas  v1.7.1
 Desarrollado por Macoem
 https://github.com/MFNC1996/horas-el-buen-corte

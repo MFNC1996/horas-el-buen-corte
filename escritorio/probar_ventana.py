@@ -342,11 +342,14 @@ check("al encenderlo se habilitan", str(v.e_cclave.cget("state")) == "normal")
 check("la contrasena no se ve al escribirla", v.e_cclave.cget("show") != "")
 check("Gmail viene puesto de fabrica", v.e_cservidor.get() == "smtp.gmail.com")
 check("con su puerto", v.e_cpuerto.get() == "587")
+check("y la casilla del negocio ya viene escrita",
+      v.e_cusuario.get() == "marcacion.elbuencorte@gmail.com")
+check("la contrasena no viene de ninguna parte", v.e_cclave.get() == "")
 
 avisos = []
 mb.showwarning = lambda *a, **k: avisos.append(a)
 v.guardar_config()
-check("no deja encenderlo sin la cuenta que envia", bool(avisos))
+check("no deja encenderlo sin la contrasena", bool(avisos))
 check("y la configuracion no queda encendida a medias",
       v.datos.config()["correo_activo"] == "0")
 mb.showwarning = lambda *a, **k: None

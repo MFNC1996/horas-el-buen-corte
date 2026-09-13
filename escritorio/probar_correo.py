@@ -86,6 +86,18 @@ check("se puede cambiar", d.trabajador(tid)["correo"] == "otra@gmail.com")
 d.editar_trabajador(tid, "Ana Soto", 3075, correo="")
 check("y se puede dejar sin correo", d.trabajador(tid)["correo"] == "")
 
+print("\n--- la cuenta que envia viene puesta ---")
+limpia = N.Datos(os.path.join(tempfile.mkdtemp(), "limpia.sqlite3"))
+check("una base nueva ya trae la casilla del negocio",
+      limpia.config()["correo_usuario"] == "marcacion.elbuencorte@gmail.com")
+check("pero no trae contrasena", limpia.config()["correo_clave"] == "")
+check("ni viene encendido", limpia.config()["correo_activo"] == "0")
+limpia.guardar_config({"correo_usuario": "otra@gmail.com"})
+ruta_l = limpia.ruta
+limpia.cerrar()
+check("si el jefe la cambia, no se la pisamos",
+      N.Datos(ruta_l).config()["correo_usuario"] == "otra@gmail.com")
+
 print("\n--- al marcar se encola el aviso ---")
 d, tid = base()
 r = d.marcar(tid, datetime(2026, 9, 14, 8, 30))

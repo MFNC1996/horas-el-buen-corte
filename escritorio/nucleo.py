@@ -13,6 +13,12 @@ from datetime import date, datetime, timedelta
 
 NEGOCIO_DEF = "Carniceria El Buen Corte"
 CIUDAD_DEF = "Loncoche"
+# La casilla desde la que salen los avisos. Se deja escrita para no tener que
+# acordarse en cada instalacion. La CONTRASENA no se guarda aqui ni en ninguna
+# parte del codigo: se escribe una sola vez en Configuracion, en el PC del
+# local, y queda en horas.sqlite3, que es un archivo del computador y no viaja
+# con el programa. Este repositorio es publico.
+CORREO_DEF = "marcacion.elbuencorte@gmail.com"
 
 CONFIG_DEF = {
     # Jornada del contrato. Lo que se pasa de aqui EN EL DIA es hora extra.
@@ -31,7 +37,7 @@ CONFIG_DEF = {
     "correo_activo": "0",
     "correo_servidor": "smtp.gmail.com",
     "correo_puerto": "587",
-    "correo_usuario": "",       # la casilla desde la que sale el aviso
+    "correo_usuario": CORREO_DEF,   # la casilla desde la que sale el aviso
     "correo_clave": "",         # contrasena de aplicacion de esa casilla
 }
 
@@ -291,6 +297,8 @@ class Datos(object):
                        valor TEXT NOT NULL)""")
         for k, v in CONFIG_DEF.items():
             c.execute("INSERT OR IGNORE INTO config VALUES (?,?)", (k, v))
+        c.execute("UPDATE config SET valor=? WHERE clave='correo_usuario' AND valor=''",
+                  (CORREO_DEF,))
         c.commit()
         self.migrar_jornadas_a_marcas()
         self._migrar_pagos_en_dos_partes()
