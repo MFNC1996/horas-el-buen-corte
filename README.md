@@ -12,9 +12,11 @@ O directo: [ControlDeHoras-Setup.exe](https://github.com/MFNC1996/horas-el-buen-
 
 Doble clic y sigue el asistente. No necesita servidor ni instalar Python, y
 funciona sin internet: lo único que lo usa es el aviso por correo, que es
-opcional, y aun así las marcaciones se guardan igual sin conexión. Windows va a mostrar el aviso «Windows protegió tu PC» porque el
-instalador no está firmado con un certificado de pago: **Más información →
-Ejecutar de todas formas**.
+opcional, y aun así las marcaciones se guardan igual sin conexión.
+
+Windows va a mostrar el aviso «Windows protegió tu PC» porque el instalador no
+está firmado con un certificado de pago: **Más información → Ejecutar de todas
+formas**.
 
 ---
 
