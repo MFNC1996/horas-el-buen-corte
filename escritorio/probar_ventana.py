@@ -336,9 +336,15 @@ v._lienzo_config.yview_moveto(0)
 v._rueda(type("E", (), {"delta": 120})())
 check("hacia arriba no se pasa del principio", v._lienzo_config.canvasy(0) == 0)
 check("viene apagado", not v.correo_activo.get())
-check("con los campos bloqueados", str(v.e_cservidor.cget("state")) == "disabled")
+# La casilla decide si se manda, no si se puede escribir: si no, para llenar
+# la cuenta habria que marcar primero la casilla que necesita esa cuenta.
+check("pero los campos se pueden llenar igual",
+      str(v.e_cservidor.cget("state")) == "normal"
+      and str(v.e_cclave.cget("state")) == "normal")
+check("el boton de prueba tampoco espera a la casilla",
+      str(v.btn_probar_correo.cget("state")) == "normal")
 v.correo_activo.set(True); v._refrescar_correo()
-check("al encenderlo se habilitan", str(v.e_cclave.cget("state")) == "normal")
+check("y siguen habilitados al encenderla", str(v.e_cclave.cget("state")) == "normal")
 check("la contrasena no se ve al escribirla", v.e_cclave.cget("show") != "")
 check("Gmail viene puesto de fabrica", v.e_cservidor.get() == "smtp.gmail.com")
 check("con su puerto", v.e_cpuerto.get() == "587")
@@ -392,10 +398,9 @@ check("el que no tiene correo marca igual",
 print("\n--- el informe del dia para el dueno ---")
 v.tabs.select(4)
 check("viene apagado", not v.informe_activo.get())
-check("con el correo del dueno bloqueado",
-      str(v.e_cjefe.cget("state")) == "disabled")
+check("el correo del dueno se puede escribir de entrada",
+      str(v.e_cjefe.cget("state")) == "normal")
 v.informe_activo.set(True); v._refrescar_correo()
-check("al encenderlo se habilita", str(v.e_cjefe.cget("state")) == "normal")
 avisos = []
 mb.showwarning = lambda *a, **k: avisos.append(a)
 v.guardar_config()

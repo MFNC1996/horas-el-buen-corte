@@ -37,7 +37,7 @@ BLANCO = "#FFFFFF"
 LINEA = "#DFD8D1"
 SUAVE = "#6C625C"
 
-VERSION = "1.8.0"
+VERSION = "1.8.1"
 AUTOR = "Macoem"
 # El titulo tambien sirve para encontrar la ventana si ya esta abierta.
 TITULO = "Control de Horas  -  El Buen Corte   |   by %s" % AUTOR
@@ -801,7 +801,9 @@ class App(tk.Tk):
         self.e_cclave = ttk.Entry(e, width=20, font=(FUENTE, 10), show="•")
         self.e_cclave.grid(row=2, column=3, sticky="w")
         tk.Label(e, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w", justify="left",
-                 text="Con Gmail la contrasena NO es la de la cuenta: hay que crear una "
+                 text="Llena la cuenta y la contrasena, presiona 'Enviar correo de "
+                      "prueba', y si llega, marca la casilla de arriba.\n"
+                      "Con Gmail la contrasena NO es la de la cuenta: hay que crear una "
                       "'contrasena de aplicacion' en la\nconfiguracion de Google. Queda "
                       "guardada en este PC, y se puede anular desde Google cuando "
                       "quieras.\nCada trabajador recibe solo sus propias marcas, en la "
@@ -1298,16 +1300,15 @@ class App(tk.Tk):
     # ----------------------------------------------------- aviso por correo
     def _refrescar_correo(self):
         """
-        Los campos del servidor se habilitan si se usa el correo para algo:
-        el aviso al trabajador y el informe del dia salen por la misma cuenta.
+        Los campos se pueden llenar siempre.
+
+        Antes se bloqueaban hasta marcar la casilla, y quedaba al reves: para
+        poder escribir la cuenta habia que marcar primero la casilla que
+        necesita esa cuenta. Ahora las casillas solo deciden si se manda o no.
         """
-        estado = ("normal" if (self.correo_activo.get() or self.informe_activo.get())
-                  else "disabled")
-        for c in (self.e_cservidor, self.e_cpuerto, self.e_cusuario, self.e_cclave):
-            c.config(state=estado)
-        self.btn_probar_correo.config(state=estado)
-        self.btn_reintentar.config(state=estado)
-        self.e_cjefe.config(state="normal" if self.informe_activo.get() else "disabled")
+        for c in (self.e_cservidor, self.e_cpuerto, self.e_cusuario,
+                  self.e_cclave, self.e_cjefe):
+            c.config(state="normal")
 
     def probar_correo(self):
         """

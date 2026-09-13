@@ -101,8 +101,8 @@ Para encenderlo:
 
 1. En TRABAJADORES, escribele el correo a cada uno.
 
-2. En CONFIGURACION, marca "Mandarle un correo a cada trabajador cada
-   vez que marca" y llena:
+2. En CONFIGURACION, baja con la rueda del mouse hasta AVISO POR CORREO
+   AL TRABAJADOR y llena:
 
        Servidor   smtp.gmail.com     (ya viene puesto)
        Puerto     587                (ya viene puesto)
@@ -115,7 +115,10 @@ Para encenderlo:
    16 letras: esas van aqui. Si algun dia quieres cortarlo, la anulas
    desde ahi y listo, sin cambiar la contrasena de la cuenta.
 
-3. Presiona "Enviar correo de prueba". Si te llega, quedo andando.
+3. Presiona "Enviar correo de prueba". Si te llega, marca la casilla
+   "Mandarle un correo a cada trabajador cada vez que marca" y guarda.
+   Ese es el orden: primero los datos, despues la prueba, y al final la
+   casilla.
 
 SI NO HAY INTERNET no pasa nada: la marca se registra igual y el aviso
 queda esperando. Sale solo cuando vuelve la conexion. Abajo, en la misma
@@ -201,6 +204,6 @@ para liquidaciones de sueldo.
 
 
 ---------------------------------------------------
-Control de Horas  v1.8.0
+Control de Horas  v1.8.1
 Desarrollado por Macoem
 https://github.com/MFNC1996/horas-el-buen-corte
