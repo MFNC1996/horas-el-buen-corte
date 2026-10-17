@@ -395,6 +395,40 @@ check("el que no tiene correo marca igual",
       v.datos.marcar(sin)["correo"] is None
       and len(v.datos.correos_por_enviar()) == 0)
 
+print("\n--- datos para la Direccion del Trabajo (Res. Ex. 38) ---")
+v.tabs.select(4)
+check("avisa que todavia no se cumple el articulo 13",
+      "articulo 13" in v.lbl_dt.cget("text"))
+check("y dice que el registro oficial sigue siendo el papel",
+      "libro de papel" in v.lbl_dt.cget("text"))
+v._set(v.e_razon, "Comercial El Buen Corte SpA")
+v._set(v.e_rutemp, "76543210-3")
+v._set(v.e_calle, "Avenida Pinto")
+v._set(v.e_numero, "450")
+v._set(v.e_comuna, "Loncoche")
+v.guardar_config()
+c = v.datos.config()
+check("guarda la razon social", c["razon_social"] == "Comercial El Buen Corte SpA")
+check("y el RUT del empleador formateado", c["rut_empleador"] == "76.543.210-3")
+check("y la direccion del local", c["calle"] == "Avenida Pinto" and c["comuna"] == "Loncoche")
+errores = []
+mb.showerror = lambda *a, **k: errores.append(a)
+v._set(v.e_rutemp, "76.543.210-9")
+v.guardar_config()
+check("un RUT de empleador invalido no se guarda",
+      v.datos.config()["rut_empleador"] == "76.543.210-3" and errores)
+v._set(v.e_rutemp, "76543210-3"); v.guardar_config()
+mb.showerror = lambda *a, **k: fallas.append("showerror: " + str(a))
+
+v.tabs.select(3)
+v.tv_t.selection_set(str(uno)); v.cargar_trabajador_sel()
+v._set(v.e_trut, "12345678-5")
+v.guardar_trabajador()
+check("el RUT del trabajador se guarda con puntos y guion",
+      v.datos.trabajador(uno)["rut"] == "12.345.678-5")
+check("y sale en la lista",
+      "12.345.678-5" in [str(x) for x in v.tv_t.item(str(uno))["values"]])
+
 print("\n--- el informe del dia para el dueno ---")
 v.tabs.select(4)
 check("viene apagado", not v.informe_activo.get())

@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nucleo as N
 import apagado
 import correo as CO
+import cumplimiento as DT
 import informes
 import instancia
 
@@ -696,14 +697,19 @@ class App(tk.Tk):
         self.e_tcontrato.grid(row=1, column=3, padx=(0, 16), sticky="w")
         ttk.Label(f, text="en blanco usa la general", style="Rotulo.TLabel").grid(
             row=1, column=4, sticky="w")
+        ttk.Label(f, text="RUT", style="Rotulo.TLabel").grid(
+            row=2, column=0, sticky="w", pady=(10, 0))
+        self.e_trut = ttk.Entry(f, width=16, font=(MONO, 10))
+        self.e_trut.grid(row=3, column=0, padx=(0, 16), sticky="w")
         ttk.Label(f, text="Correo para avisarle cuando marca",
-                  style="Rotulo.TLabel").grid(row=2, column=0, columnspan=3,
+                  style="Rotulo.TLabel").grid(row=2, column=1, columnspan=2,
                                               sticky="w", pady=(10, 0))
-        self.e_tcorreo = ttk.Entry(f, width=34, font=(FUENTE, 11))
-        self.e_tcorreo.grid(row=3, column=0, columnspan=2, padx=(0, 16), sticky="w")
+        self.e_tcorreo = ttk.Entry(f, width=30, font=(FUENTE, 11))
+        self.e_tcorreo.grid(row=3, column=1, columnspan=2, padx=(0, 16), sticky="w")
         tk.Label(f, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w", justify="left",
-                 text="Se activa en Configuracion.  Sin correo, igual puede marcar."
-                 ).grid(row=3, column=2, columnspan=3, sticky="w")
+                 text="El RUT y el correo son obligatorios para que el comprobante\n"
+                      "de marcacion cumpla la Resolucion 38 de la Direccion del Trabajo."
+                 ).grid(row=3, column=3, columnspan=2, sticky="w")
 
         self.lbl_calc = tk.Label(p, text="", bg=PAPEL, fg=VERDE, font=(FUENTE, 9),
                                  justify="left", anchor="w")
@@ -719,12 +725,12 @@ class App(tk.Tk):
 
         marco = ttk.LabelFrame(p, text=" TRABAJADORES ", padding=10)
         marco.pack(fill="both", expand=True, pady=(14, 0))
-        cols = ("nombre", "vh", "vhe", "contrato", "dias", "correo")
+        cols = ("nombre", "rut", "vh", "vhe", "contrato", "dias", "correo")
         self.tv_t = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse")
-        for c, t, a, al in zip(cols, ["Nombre", "Valor hora", "Valor hora extra",
+        for c, t, a, al in zip(cols, ["Nombre", "RUT", "Valor hora", "Valor hora extra",
                                       "Contrato (h/dia)", "Dias trabajados", "Correo"],
-                               [170, 108, 128, 118, 112, 210],
-                               ["w", "e", "e", "e", "e", "w"]):
+                               [150, 108, 96, 118, 110, 100, 180],
+                               ["w", "w", "e", "e", "e", "e", "w"]):
             self.tv_t.heading(c, text=t)
             self.tv_t.column(c, width=a, anchor=al)
         self.tv_t.pack(fill="both", expand=True)
@@ -840,6 +846,42 @@ class App(tk.Tk):
         self.lbl_informe = tk.Label(g, text="", bg=PAPEL, fg=SUAVE, anchor="w",
                                     font=(FUENTE, 9), justify="left")
         self.lbl_informe.grid(row=3, column=0, columnspan=2, sticky="we", pady=(8, 0))
+
+        h = ttk.LabelFrame(p, text=" DATOS LEGALES DEL EMPLEADOR (van en el "
+                                   "comprobante de marcacion) ", padding=14)
+        h.pack(fill="x", pady=(14, 0))
+        ttk.Label(h, text="Razon social", style="Rotulo.TLabel").grid(
+            row=0, column=0, sticky="w")
+        self.e_razon = ttk.Entry(h, width=36, font=(FUENTE, 11))
+        self.e_razon.grid(row=1, column=0, columnspan=2, padx=(0, 14), sticky="w")
+        ttk.Label(h, text="RUT del empleador", style="Rotulo.TLabel").grid(
+            row=0, column=2, sticky="w")
+        self.e_rutemp = ttk.Entry(h, width=16, font=(MONO, 10))
+        self.e_rutemp.grid(row=1, column=2, sticky="w")
+        for col, (rotulo, ancho, campo) in enumerate((
+                ("Calle", 24, "e_calle"), ("Numero", 8, "e_numero"),
+                ("Comuna", 16, "e_comuna"))):
+            ttk.Label(h, text=rotulo, style="Rotulo.TLabel").grid(
+                row=2, column=col, sticky="w", pady=(10, 0))
+            caja = ttk.Entry(h, width=ancho, font=(FUENTE, 10))
+            caja.grid(row=3, column=col, padx=(0, 14), sticky="w")
+            setattr(self, campo, caja)
+        ttk.Label(h, text="Ciudad", style="Rotulo.TLabel").grid(
+            row=4, column=0, sticky="w", pady=(10, 0))
+        self.e_ciudad_dt = ttk.Entry(h, width=24, font=(FUENTE, 10))
+        self.e_ciudad_dt.grid(row=5, column=0, padx=(0, 14), sticky="w")
+        ttk.Label(h, text="Region", style="Rotulo.TLabel").grid(
+            row=4, column=1, columnspan=2, sticky="w", pady=(10, 0))
+        self.e_region = ttk.Entry(h, width=30, font=(FUENTE, 10))
+        self.e_region.grid(row=5, column=1, columnspan=2, sticky="w")
+        tk.Label(h, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w", justify="left",
+                 text="La direccion es la del lugar donde se marca, no la de la casa\n"
+                      "matriz. Lo exige el articulo 13 de la Resolucion 38 de la\n"
+                      "Direccion del Trabajo."
+                 ).grid(row=2, column=3, rowspan=4, sticky="nw", padx=(10, 0))
+        self.lbl_dt = tk.Label(h, text="", bg=PAPEL, fg=SUAVE, anchor="w",
+                               font=(FUENTE, 9), justify="left")
+        self.lbl_dt.grid(row=6, column=0, columnspan=4, sticky="we", pady=(12, 0))
 
         pie = ttk.Frame(p)
         pie.pack(fill="x", pady=(16, 0))
@@ -970,11 +1012,12 @@ class App(tk.Tk):
                                           self._numero(self.e_tvalor.get()),
                                           self._numero(self.e_tvalorx.get()),
                                           self._numero(self.e_tcontrato.get()),
-                                          self.e_tcorreo.get())
+                                          self.e_tcorreo.get(),
+                                          self.e_trut.get())
         except ValueError as e:
             return messagebox.showerror("No se pudo agregar", str(e))
         for c in (self.e_tnombre, self.e_tvalor, self.e_tvalorx, self.e_tcontrato,
-                  self.e_tcorreo):
+                  self.e_tcorreo, self.e_trut):
             self._set(c, "")
         self.lbl_calc.config(text="")
         self.recargar_todo()
@@ -1005,7 +1048,8 @@ class App(tk.Tk):
                                          self._numero(self.e_tvalor.get()),
                                          self._numero(self.e_tvalorx.get()),
                                          self._numero(self.e_tcontrato.get()),
-                                         self.e_tcorreo.get())
+                                         self.e_tcorreo.get(),
+                                         self.e_trut.get())
         except ValueError as e:
             return messagebox.showerror("No se pudo guardar", str(e))
         self.recargar_todo()
@@ -1044,6 +1088,13 @@ class App(tk.Tk):
                 "correo_clave": self.e_cclave.get(),
                 "informe_activo": "1" if self.informe_activo.get() else "0",
                 "correo_jefe": N.limpiar_correo(self.e_cjefe.get()),
+                "razon_social": self.e_razon.get().strip(),
+                "rut_empleador": DT.formatear_rut(self.e_rutemp.get()),
+                "calle": self.e_calle.get().strip(),
+                "numero": self.e_numero.get().strip(),
+                "comuna": self.e_comuna.get().strip(),
+                "ciudad": self.e_ciudad_dt.get().strip(),
+                "region": self.e_region.get().strip(),
             }
         except ValueError as e:
             return messagebox.showerror("Dato invalido", str(e))
@@ -1160,6 +1211,7 @@ class App(tk.Tk):
         self.recargar_jornadas()
         self.recargar_resumen()
         self.recargar_trabajadores()
+        self._avisar_cumplimiento()
         self.recargar_config()
 
     def recargar_jornadas(self):
@@ -1277,7 +1329,7 @@ class App(tk.Tk):
             self.tv_t.delete(f)
         for t in self._trabs:
             self.tv_t.insert("", "end", iid=str(t["id"]), values=(
-                t["nombre"], N.pesos(t["valor_hora"]),
+                t["nombre"], t.get("rut") or "-", N.pesos(t["valor_hora"]),
                 N.pesos(t["valor_hora_extra"]) if t["valor_hora_extra"] else "-",
                 N._limpio(t["horas_contrato"]) if t["horas_contrato"] else "general",
                 self.datos.jornadas_de(t["id"]),
@@ -1296,8 +1348,33 @@ class App(tk.Tk):
                 self._set(self.e_tcontrato,
                           N._limpio(t["horas_contrato"]) if t["horas_contrato"] else "")
                 self._set(self.e_tcorreo, t.get("correo") or "")
+                self._set(self.e_trut, t.get("rut") or "")
 
     # ----------------------------------------------------- aviso por correo
+    def _avisar_cumplimiento(self):
+        """
+        Dice en pantalla que falta para que el comprobante cumpla el art. 13.
+
+        Es mejor enterarse aca que en una fiscalizacion.
+        """
+        if not hasattr(self, "lbl_dt"):
+            return
+        faltas = DT.faltan_datos_para_la_dt(self.datos.config(),
+                                            self.datos.trabajadores())
+        if faltas:
+            self.lbl_dt.config(
+                fg=ROJO,
+                text="El comprobante todavia no cumple el articulo 13: falta "
+                     + "; ".join(faltas) + ".\nMientras tanto se manda el aviso "
+                     "simple, y el registro oficial sigue siendo el libro de papel.")
+        else:
+            self.lbl_dt.config(
+                fg=VERDE,
+                text="Los comprobantes llevan todo lo que exige el articulo 13. "
+                     "Esto no reemplaza la autorizacion de la\nDireccion del "
+                     "Trabajo: para eso falta el portal de fiscalizacion y la "
+                     "certificacion (ver CUMPLIMIENTO-DT.md).")
+
     def _refrescar_correo(self):
         """
         Los campos se pueden llenar siempre.
@@ -1550,6 +1627,12 @@ class App(tk.Tk):
         self.informe_activo.set(c.get("informe_activo", "0") == "1")
         self._set(self.e_cjefe, c.get("correo_jefe", ""))
         self._refrescar_correo()
+        for campo, clave in (("e_razon", "razon_social"), ("e_rutemp", "rut_empleador"),
+                             ("e_calle", "calle"), ("e_numero", "numero"),
+                             ("e_comuna", "comuna"), ("e_ciudad_dt", "ciudad"),
+                             ("e_region", "region")):
+            self._set(getattr(self, campo), c.get(clave, ""))
+        self._avisar_cumplimiento()
         ultimo = c.get("ultimo_informe", "")
         if not self.informe_activo.get():
             self.lbl_informe.config(text="El informe del dia esta apagado.")
