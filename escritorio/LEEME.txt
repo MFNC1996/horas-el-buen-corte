@@ -175,6 +175,39 @@ quedo pendiente.
 Lo mismo con un corte de luz.
 
 
+¿SIRVE COMO REGISTRO OFICIAL ANTE LA DIRECCION DEL TRABAJO?
+-----------------------------------------------------------
+TODAVIA NO. Y es importante entenderlo bien.
+
+Desde abril de 2024, un sistema electronico de asistencia solo se puede
+usar como registro oficial si la Direccion del Trabajo lo autorizo antes
+(Resolucion Exenta N°38 de 2024). Usar uno sin autorizar se considera no
+haber llevado registro, y eso se multa.
+
+El registro OFICIAL del local tiene que seguir siendo, por ahora, el
+LIBRO DE ASISTENCIA EN PAPEL, que no necesita permiso de nadie. Este
+programa es la herramienta para calcular y pagar, no el registro legal.
+
+Dicho eso, la version 2.0 ya cumple varias de las exigencias:
+
+  - Las marcas se guardan con segundos, y el calculo resta exacto.
+  - Cada marcacion lleva un sello SHA-256 que delata si alguien toco la
+    base de datos por fuera.
+  - El comprobante que le llega al trabajador trae lo que exige la norma:
+    su RUT, la razon social y el RUT del empleador, la direccion del local
+    y el sello.
+  - Toda correccion queda en una bitacora que no se puede borrar.
+
+Para que esos comprobantes cumplan hay que llenar, en CONFIGURACION, los
+DATOS LEGALES DEL EMPLEADOR, y el RUT de cada trabajador en la pestana
+TRABAJADORES. La misma pantalla avisa en rojo lo que falta.
+
+Lo que todavia falta para pedir la autorizacion es un sitio web de
+fiscalizacion para la Direccion del Trabajo y una certificacion hecha por
+una empresa externa. Eso esta explicado en el archivo CUMPLIMIENTO-DT.md
+del proyecto.
+
+
 UNA SOLA VENTANA
 ----------------
 El programa se abre una sola vez. Si ya esta abierto y le das doble clic
@@ -204,6 +237,6 @@ para liquidaciones de sueldo.
 
 
 ---------------------------------------------------
-Control de Horas  v1.8.1
+Control de Horas  v2.0.0
 Desarrollado por Macoem
 https://github.com/MFNC1996/horas-el-buen-corte

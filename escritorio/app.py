@@ -707,8 +707,10 @@ class App(tk.Tk):
         self.e_tcorreo = ttk.Entry(f, width=30, font=(FUENTE, 11))
         self.e_tcorreo.grid(row=3, column=1, columnspan=2, padx=(0, 16), sticky="w")
         tk.Label(f, bg=PAPEL, fg=SUAVE, font=(FUENTE, 9), anchor="w", justify="left",
-                 text="El RUT y el correo son obligatorios para que el comprobante\n"
-                      "de marcacion cumpla la Resolucion 38 de la Direccion del Trabajo."
+                 text="El RUT y el correo son obligatorios\n"
+                      "para el comprobante de marcacion\n"
+                      "(Resolucion 38 de la Direccion\n"
+                      "del Trabajo, articulo 13)."
                  ).grid(row=3, column=3, columnspan=2, sticky="w")
 
         self.lbl_calc = tk.Label(p, text="", bg=PAPEL, fg=VERDE, font=(FUENTE, 9),

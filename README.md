@@ -143,6 +143,27 @@ abrir, si quedó un día sin informar, ofrece mandarlo.
 
 ---
 
+## ¿Sirve como registro oficial ante la Dirección del Trabajo?
+
+**Todavía no**, y conviene decirlo fuerte: desde abril de 2024 un sistema
+electrónico de asistencia solo puede usarse como registro oficial si la DT lo
+autorizó antes ([Resolución Exenta N°38](https://www.bcn.cl/leychile/navegar?idNorma=1203415),
+que dicta el nuevo artículo 33 inciso 2 del Código del Trabajo). Usar uno sin
+autorizar equivale a no llevar registro. Mientras tanto el registro legal es el
+libro de asistencia en papel, que no necesita permiso.
+
+La versión 2.0 cumple ya la parte que no depende de tener un servidor: segundos
+en las marcas (art. 44), sello SHA-256 por marcación (art. 8), comprobante con
+el contenido del art. 13, bitácora inalterable de correcciones (art. 41) y
+correo único por trabajador (art. 12 e).
+
+Lo que falta —portal web de fiscalización 24/7, base replicada, certificación
+por una empresa independiente cada 24 meses— está analizado artículo por
+artículo en **[CUMPLIMIENTO-DT.md](CUMPLIMIENTO-DT.md)**, junto con el plan de
+trabajo y lo que cuesta.
+
+---
+
 ## Dónde quedan los datos
 
 ```
@@ -170,6 +191,7 @@ python escritorio/app.py
 | `escritorio/informes.py` | Informe mensual en Excel y PDF. |
 | `escritorio/instancia.py` | Deja abrir el programa una sola vez. |
 | `escritorio/apagado.py` | Aviso antes de que Windows apague con algo sin mandar. |
+| `escritorio/cumplimiento.py` | RUT, sello SHA-256 y comprobante de la Resolución 38. |
 | `escritorio/imagen_marca.py` | El logo, generado; no se edita a mano. |
 | `escritorio/empaquetado/` | Receta de PyInstaller, script de Inno Setup, ícono y capturas. |
 
