@@ -34,6 +34,7 @@ jobs:
           python escritorio/probar_marcas.py
           python escritorio/probar_pagos.py
           python escritorio/probar_correo.py
+          python escritorio/probar_cumplimiento.py
 
       - name: Comprobar que la ventana se puede construir en Windows
         timeout-minutes: 5
@@ -224,8 +225,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.8.1
-          name: Control de Horas 1.8.1
+          tag_name: v2.0.0
+          name: Control de Horas 2.0.0
           body: |
             Aplicacion de escritorio para Windows: control de horas trabajadas
             de Carniceria El Buen Corte, Loncoche.
@@ -255,6 +256,28 @@ jobs:
             La semana acumula esos valores y cierra el dia de pago que elijas
             (por defecto el sabado), asi que el total que muestra es justo lo que
             hay que pagar. Sin calculadora.
+
+            ### Novedad de la 2.0.0: primeros pasos hacia la Direccion del Trabajo
+
+            La Resolucion Exenta N°38 de 2024 exige, para que un sistema
+            electronico pueda ser el registro OFICIAL de asistencia, cosas que
+            esta version ya incorpora:
+
+            - Las marcaciones se guardan con segundos (art. 44).
+            - Cada marcacion nace con un sello SHA-256 que delata cualquier
+              alteracion posterior de la base de datos (art. 8).
+            - El comprobante que le llega al trabajador trae el contenido
+              exacto del art. 13: RUT con digito verificador, razon social y
+              RUT del empleador, direccion del local y el sello.
+            - Toda correccion queda en una bitacora que nadie puede borrar,
+              con el antes y el despues (art. 41).
+            - Dos trabajadores ya no pueden compartir el mismo correo (art. 12).
+
+            OJO: esto NO significa que el sistema este autorizado. Falta el
+            portal web de fiscalizacion y la certificacion por una empresa
+            independiente. Mientras tanto, el registro oficial del local sigue
+            siendo el libro de asistencia en papel. El detalle completo esta en
+            CUMPLIMIENTO-DT.md.
 
             ### Arreglo de la 1.8.1
 

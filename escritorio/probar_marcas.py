@@ -144,12 +144,18 @@ check("sin extra", justo["extra"], 0.0)
 check("el dia vale 7 x 3075", justo["total"], 21525)
 
 print("\n--- la hora se puede escribir corta ---")
-for escrito, esperado in [("830","08:30"), ("0830","08:30"), ("8:30","08:30"),
-                          ("8.30","08:30"), ("1930","19:30"), ("8","08:00"),
-                          ("19","19:00"), ("23:59","23:59"), ("1:5","01:05")]:
+# Desde la 2.0 las horas se guardan con segundos: el articulo 44 de la
+# Resolucion Exenta N°38 exige precision de hora, minuto y segundo. Lo que
+# se escribe sin segundos queda en :00.
+for escrito, esperado in [("830","08:30:00"), ("0830","08:30:00"),
+                          ("8:30","08:30:00"), ("8.30","08:30:00"),
+                          ("1930","19:30:00"), ("8","08:00:00"),
+                          ("19","19:00:00"), ("23:59","23:59:00"),
+                          ("1:5","01:05:00"), ("8:30:12","08:30:12"),
+                          ("23:59:59","23:59:59")]:
     check("%-7r queda como %s" % (escrito, esperado),
           N.normalizar_hora(escrito), esperado)
-for malo in ["2400", "99", "", "abc", "12345", "24:00"]:
+for malo in ["2400", "99", "", "abc", "12345", "24:00", "8:30:61", "1:2:3:4"]:
     check("%-7r se rechaza" % malo, N.normalizar_hora(malo), None)
 
 print("\n--- y al guardar tambien se acomoda ---")
@@ -157,13 +163,13 @@ corto = d.agregar_trabajador("Escribe corto", 3000)
 d.agregar_marca(corto, "2026-09-14", "entrada", "830")
 d.agregar_marca(corto, "2026-09-14", "salida", "1930")
 ms = dict((m["tipo"], m["hora"]) for m in d.marcas_de(corto, "2026-09-14"))
-check("entrada guardada como 08:30", ms["entrada"], "08:30")
-check("salida guardada como 19:30", ms["salida"], "19:30")
+check("entrada guardada como 08:30:00", ms["entrada"], "08:30:00")
+check("salida guardada como 19:30:00", ms["salida"], "19:30:00")
 d.editar_marca([m for m in d.marcas_de(corto, "2026-09-14")
                 if m["tipo"] == "salida"][0]["id"], hora="20")
-check("editar con '20' deja 20:00",
+check("editar con '20' deja 20:00:00",
       [m for m in d.marcas_de(corto, "2026-09-14")
-       if m["tipo"] == "salida"][0]["hora"], "20:00")
+       if m["tipo"] == "salida"][0]["hora"], "20:00:00")
 
 print("\n--- valor hora desde el sueldo del contrato ---")
 check("553.553 con 42 h semanales", N.valor_hora_desde_sueldo(553553, 42), 3075)

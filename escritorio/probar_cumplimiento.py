@@ -146,6 +146,99 @@ check("arma calle, numero, comuna, ciudad y region",
 check("si falta todo, lo dice en vez de quedar en blanco",
       "sin direccion" in C.direccion_en_una_linea({}))
 
+print("\n--- ya enganchado en el programa ---")
+import os, tempfile
+from datetime import datetime
+import nucleo as N
+
+
+def local(**extra):
+    d = N.Datos(os.path.join(tempfile.mkdtemp(), "dt.sqlite3"))
+    cfg = {"correo_activo": "1", "razon_social": "Comercial El Buen Corte SpA",
+           "rut_empleador": "76543210-3", "calle": "Avenida Pinto",
+           "numero": "450", "comuna": "Loncoche"}
+    cfg.update(extra)
+    d.guardar_config(cfg)
+    return d
+
+
+d = local()
+ana = d.agregar_trabajador("Ana Soto Perez", 3075, correo="ana@gmail.com",
+                           rut="12345678-5")
+check("el RUT se guarda formateado", d.trabajador(ana)["rut"] == "12.345.678-5")
+try:
+    d.agregar_trabajador("Mal RUT", 3000, rut="12.345.678-9")
+    check("un RUT invalido no entra", False)
+except ValueError:
+    check("un RUT invalido no entra", True)
+try:
+    d.agregar_trabajador("Correo repetido", 3000, correo="ana@gmail.com")
+    check("12 e) dos trabajadores no pueden tener el mismo correo", False)
+except ValueError as e:
+    check("12 e) dos trabajadores no pueden tener el mismo correo",
+          "Ana Soto Perez" in str(e))
+check("pero el mismo puede conservar el suyo al editarse",
+      d.editar_trabajador(ana, "Ana Soto Perez", 3075,
+                          correo="ana@gmail.com", rut="12345678-5") is None)
+
+r = d.marcar(ana, datetime(2026, 10, 17, 8, 30, 12))
+m = d.marcas_de(ana, "2026-10-17")[0]
+check("44) la hora se guarda con segundos", m["hora"] == "08:30:12")
+check("8) la marcacion nace con su sello", len(m["sello"]) == 64)
+check("y el sello cuadra", d.sello_valido(m) is True)
+d.cx.execute("UPDATE marcas SET hora='03:00:00' WHERE id=?", (m["id"],))
+d.cx.commit()
+check("si alguien toca la base por fuera, el sello lo delata",
+      d.sello_valido(d.marcas_de(ana, "2026-10-17")[0]) is False)
+
+print("\n--- bitacora de correcciones (art. 41 a) ---")
+d = local()
+ana = d.agregar_trabajador("Ana Soto Perez", 3075, correo="ana@gmail.com",
+                           rut="12345678-5")
+d.agregar_marca(ana, "2026-10-16", "entrada", "08:30")
+check("agregar a mano queda anotado",
+      [b["accion"] for b in d.bitacora_de(ana, "2026-10-16")] == ["agrega"])
+mid = d.marcas_de(ana, "2026-10-16")[0]["id"]
+d.editar_marca(mid, hora="09:15")
+anotaciones = d.bitacora_de(ana, "2026-10-16")
+check("corregir tambien", anotaciones[-1]["accion"] == "edita")
+check("y guarda el antes y el despues",
+      "08:30:00" in anotaciones[-1]["antes"] and "09:15:00" in anotaciones[-1]["despues"])
+check("al corregir se vuelve a firmar la marca",
+      d.sello_valido(d.marcas_de(ana, "2026-10-16")[0]) is True)
+check("el dia queda marcado como intervenido",
+      d.dia_intervenido(ana, "2026-10-16"))
+check("y un dia sin tocar, no", not d.dia_intervenido(ana, "2026-10-15"))
+d.borrar_dia(ana, "2026-10-16")
+check("borrar el dia no borra su bitacora",
+      len(d.bitacora_de(ana, "2026-10-16")) == 3)
+check("y queda dicho que se elimino",
+      d.bitacora_de(ana, "2026-10-16")[-1]["accion"] == "borra")
+
+print("\n--- el comprobante sale solo si estan los datos ---")
+d = local()
+ana = d.agregar_trabajador("Ana Soto Perez", 3075, correo="ana@gmail.com",
+                           rut="12345678-5")
+d.marcar(ana, datetime(2026, 10, 17, 8, 30, 12))
+cuerpo = d.correos_por_enviar()[0]["cuerpo"]
+check("con todo lleno sale el comprobante formal",
+      "COMPROBANTE DE MARCACION" in cuerpo and "12.345.678-5" in cuerpo)
+check("y lleva el sello de la marcacion",
+      d.marcas_de(ana, "2026-10-17")[0]["sello"] in cuerpo)
+check("mas el resumen del dia, que ayuda al trabajador",
+      "TUS MARCAS DE ESE DIA" in cuerpo)
+
+sin_datos = N.Datos(os.path.join(tempfile.mkdtemp(), "faltan.sqlite3"))
+sin_datos.guardar_config({"correo_activo": "1", "razon_social": "",
+                          "rut_empleador": ""})
+juan = sin_datos.agregar_trabajador("Juan", 3000, correo="juan@gmail.com")
+sin_datos.marcar(juan, datetime(2026, 10, 17, 8, 30, 12))
+simple = sin_datos.correos_por_enviar()[0]["cuerpo"]
+check("sin los datos del empleador igual avisa, con el texto simple",
+      "Hola Juan" in simple and "COMPROBANTE DE MARCACION" not in simple)
+check("o sea: nadie se queda sin aviso mientras se completan los datos",
+      len(sin_datos.correos_por_enviar()) == 1)
+
 print("")
 if fallas:
     print("%d FALLAS: %s" % (len(fallas), fallas))

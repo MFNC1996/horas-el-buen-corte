@@ -9,6 +9,8 @@ No depende de la interfaz, asi que se puede probar solo. La ventana
 import os
 import sqlite3
 import sys
+
+import cumplimiento as DT
 from datetime import date, datetime, timedelta
 
 NEGOCIO_DEF = "Carniceria El Buen Corte"
@@ -40,6 +42,16 @@ CONFIG_DEF = {
     "correo_usuario": CORREO_DEF,   # la casilla desde la que sale el aviso
     "correo_clave": "",         # contrasena de aplicacion de esa casilla
     # Informe del dia para el dueno, una vez al dia, al cerrar el programa.
+    # Datos que el articulo 13.2 de la Resolucion Exenta N°38 obliga a poner
+    # en cada comprobante de marcacion. Sin esto el comprobante no cumple.
+    "razon_social": "",
+    "rut_empleador": "",
+    "calle": "",
+    "numero": "",
+    "comuna": CIUDAD_DEF,
+    "ciudad": CIUDAD_DEF,
+    "region": "Region de La Araucania",
+    "resolucion_excepcional": "",   # art. 13.1 e), si la hubiera
     "informe_activo": "0",
     "correo_jefe": "",          # a quien le llega el informe del dia
     "ultimo_informe": "",       # el ultimo dia que ya se informo (YYYY-MM-DD)
@@ -85,16 +97,32 @@ def carpeta_datos():
 
 
 # ------------------------------------------------------------------ calculos
-def a_minutos(hhmm):
-    """'08:30' -> 510. Devuelve None si no se entiende."""
+def a_segundos(hora):
+    """
+    '08:30' -> 30600   ·   '08:30:12' -> 30612.  None si no se entiende.
+
+    Acepta las dos formas a proposito: las marcas guardadas antes de la
+    version 2.0 estan en HH:MM y tienen que seguir calculando bien.
+    """
     try:
-        h, m = str(hhmm).strip().split(":")
-        h, m = int(h), int(m)
+        partes = str(hora).strip().split(":")
+        if len(partes) == 2:
+            h, m, s = int(partes[0]), int(partes[1]), 0
+        elif len(partes) == 3:
+            h, m, s = int(partes[0]), int(partes[1]), int(partes[2])
+        else:
+            return None
     except (ValueError, AttributeError):
         return None
-    if not (0 <= h <= 23 and 0 <= m <= 59):
+    if not (0 <= h <= 23 and 0 <= m <= 59 and 0 <= s <= 59):
         return None
-    return h * 60 + m
+    return h * 3600 + m * 60 + s
+
+
+def a_minutos(hhmm):
+    """'08:30' -> 510. Devuelve None si no se entiende."""
+    s = a_segundos(hhmm)
+    return None if s is None else s // 60
 
 
 def a_hhmm(minutos):
@@ -115,12 +143,17 @@ def normalizar_hora(texto):
     t = str(texto or "").strip().replace(".", ":").replace(" ", ":")
     if not t:
         return None
+    s = 0
     if ":" in t:
         partes = [x for x in t.split(":") if x != ""]
-        if len(partes) == 1 and partes[0].isdigit():
+        if not all(p.isdigit() for p in partes):
+            return None
+        if len(partes) == 1:
             h, m = int(partes[0]), 0
-        elif len(partes) == 2 and partes[0].isdigit() and partes[1].isdigit():
+        elif len(partes) == 2:
             h, m = int(partes[0]), int(partes[1])
+        elif len(partes) == 3:
+            h, m, s = int(partes[0]), int(partes[1]), int(partes[2])
         else:
             return None
     else:
@@ -133,20 +166,30 @@ def normalizar_hora(texto):
             h, m = int(d[0]), int(d[1:])
         else:
             h, m = int(d[:2]), int(d[2:])
-    if not (0 <= h <= 23 and 0 <= m <= 59):
+    if not (0 <= h <= 23 and 0 <= m <= 59 and 0 <= s <= 59):
         return None
-    return "%02d:%02d" % (h, m)
+    return "%02d:%02d:%02d" % (h, m, s)
 
 
-def minutos_turno(entrada, salida):
-    """Minutos entre entrada y salida. Si cruza medianoche, suma 24 h."""
-    e, s = a_minutos(entrada), a_minutos(salida)
+def segundos_turno(entrada, salida):
+    """
+    Segundos entre entrada y salida. Si cruza medianoche, suma 24 h.
+
+    El calculo va en segundos porque el articulo 44 de la Resolucion Exenta
+    N°38 exige restar las cantidades exactas, sin aproximar.
+    """
+    e, s = a_segundos(entrada), a_segundos(salida)
     if e is None or s is None:
         return 0
     d = s - e
     if d < 0:
-        d += 1440
+        d += 86400
     return d
+
+
+def minutos_turno(entrada, salida):
+    """Minutos entre entrada y salida, para lo que se muestra en pantalla."""
+    return segundos_turno(entrada, salida) // 60
 
 
 def horas_trabajadas(entrada, salida, colacion_min):
@@ -172,11 +215,12 @@ def horas_de_marcas(marcas):
         por_tipo[m["tipo"]] = m["hora"]
     if "entrada" not in por_tipo or "salida" not in por_tipo:
         return 0.0
-    bruto = minutos_turno(por_tipo["entrada"], por_tipo["salida"])
+    bruto = segundos_turno(por_tipo["entrada"], por_tipo["salida"])
     colacion = 0
     if "colacion_inicio" in por_tipo and "colacion_fin" in por_tipo:
-        colacion = minutos_turno(por_tipo["colacion_inicio"], por_tipo["colacion_fin"])
-    return round(max(0, bruto - colacion) / 60.0, 2)
+        colacion = segundos_turno(por_tipo["colacion_inicio"],
+                                  por_tipo["colacion_fin"])
+    return round(max(0, bruto - colacion) / 3600.0, 4)
 
 
 def minutos_colacion(marcas):
@@ -283,6 +327,15 @@ class Datos(object):
         if "correo" not in columnas:
             c.execute("ALTER TABLE trabajadores ADD COLUMN "
                       "correo TEXT NOT NULL DEFAULT ''")
+        if "rut" not in columnas:
+            c.execute("ALTER TABLE trabajadores ADD COLUMN "
+                      "rut TEXT NOT NULL DEFAULT ''")
+        cols_marcas = [f[1] for f in c.execute("PRAGMA table_info(marcas)")]
+        if cols_marcas and "sello" not in cols_marcas:
+            # Sello de integridad del articulo 8. Las marcas viejas quedan sin
+            # sello: eso es correcto, no se puede firmar hacia atras algo que
+            # no se firmo en su momento.
+            c.execute("ALTER TABLE marcas ADD COLUMN sello TEXT NOT NULL DEFAULT ''")
         # Cola de avisos por correo. Se encola al marcar y se envia aparte,
         # asi una caida de internet no deja a nadie sin poder marcar.
         c.execute("""CREATE TABLE IF NOT EXISTS correos (
@@ -307,6 +360,20 @@ class Datos(object):
                        nombre    TEXT NOT NULL,
                        contenido BLOB NOT NULL)""")
         c.execute("CREATE INDEX IF NOT EXISTS ix_adjuntos ON adjuntos(correo_id)")
+        # Bitacora de toda intervencion sobre los registros (art. 41 letra a:
+        # tienen que quedar visibles). Esta tabla solo crece: nada la borra.
+        c.execute("""CREATE TABLE IF NOT EXISTS bitacora (
+                       id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                       cuando        TEXT    NOT NULL,
+                       accion        TEXT    NOT NULL,   -- edita|agrega|borra
+                       trabajador_id INTEGER,
+                       fecha         TEXT    NOT NULL DEFAULT '',
+                       tipo          TEXT    NOT NULL DEFAULT '',
+                       antes         TEXT    NOT NULL DEFAULT '',
+                       despues       TEXT    NOT NULL DEFAULT '',
+                       motivo        TEXT    NOT NULL DEFAULT '',
+                       quien         TEXT    NOT NULL DEFAULT 'administrador')""")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_bitacora ON bitacora(trabajador_id, fecha)")
         c.execute("""CREATE TABLE IF NOT EXISTS config (
                        clave TEXT PRIMARY KEY,
                        valor TEXT NOT NULL)""")
@@ -355,32 +422,57 @@ class Datos(object):
         return dict(f) if f else None
 
     def agregar_trabajador(self, nombre, valor_hora=0, valor_hora_extra=0,
-                           horas_contrato=0, correo=""):
+                           horas_contrato=0, correo="", rut=""):
         nombre = (nombre or "").strip()
         if not nombre:
             raise ValueError("El nombre no puede estar vacio.")
         correo = limpiar_correo(correo)
+        rut = DT.formatear_rut(rut)
+        self._correo_libre(correo)
         orden = self.cx.execute(
             "SELECT COALESCE(MAX(orden),0)+1 FROM trabajadores").fetchone()[0]
         cur = self.cx.execute(
             "INSERT INTO trabajadores (nombre, valor_hora, valor_hora_extra, "
-            "horas_contrato, correo, orden) VALUES (?,?,?,?,?,?)",
+            "horas_contrato, correo, rut, orden) VALUES (?,?,?,?,?,?,?)",
             (nombre, float(valor_hora or 0), float(valor_hora_extra or 0),
-             float(horas_contrato or 0), correo, orden))
+             float(horas_contrato or 0), correo, rut, orden))
         self.cx.commit()
         return cur.lastrowid
 
     def editar_trabajador(self, tid, nombre, valor_hora, valor_hora_extra=0,
-                          horas_contrato=0, correo=""):
+                          horas_contrato=0, correo="", rut=""):
         nombre = (nombre or "").strip()
         if not nombre:
             raise ValueError("El nombre no puede estar vacio.")
         correo = limpiar_correo(correo)
+        rut = DT.formatear_rut(rut)
+        self._correo_libre(correo, tid)
         self.cx.execute("UPDATE trabajadores SET nombre=?, valor_hora=?, "
-                        "valor_hora_extra=?, horas_contrato=?, correo=? WHERE id=?",
+                        "valor_hora_extra=?, horas_contrato=?, correo=?, rut=? "
+                        "WHERE id=?",
                         (nombre, float(valor_hora or 0), float(valor_hora_extra or 0),
-                         float(horas_contrato or 0), correo, tid))
+                         float(horas_contrato or 0), correo, rut, tid))
         self.cx.commit()
+
+    def _correo_libre(self, correo, salvo=None):
+        """
+        Dos trabajadores no pueden tener el mismo correo.
+
+        Lo exige el articulo 12 letra e) de la Resolucion Exenta N°38, y la
+        razon es obvia: si se repite, uno recibe los comprobantes del otro.
+        """
+        if not correo:
+            return
+        sql = "SELECT nombre FROM trabajadores WHERE lower(correo)=lower(?)"
+        datos = [correo]
+        if salvo is not None:
+            sql += " AND id<>?"
+            datos.append(salvo)
+        otro = self.cx.execute(sql, datos).fetchone()
+        if otro:
+            raise ValueError(
+                "Ese correo ya es de %s. Cada trabajador tiene que tener el "
+                "suyo, porque ahi le llegan sus comprobantes." % otro["nombre"])
 
     def desactivar_trabajador(self, tid):
         """No se borra: sus jornadas historicas tienen que seguir cuadrando."""
@@ -451,7 +543,10 @@ class Datos(object):
             return hoy                                   # jornada completa
         entrada = [m for m in marcas if m["tipo"] == "entrada"]
         if entrada:
-            ini = datetime.strptime(fecha + " " + entrada[0]["hora"], "%Y-%m-%d %H:%M")
+            # La hora viene en HH:MM:SS desde la 2.0 y en HH:MM en las bases
+            # viejas, asi que se arma con los segundos del dia y no con strptime.
+            ini = (datetime.strptime(fecha, "%Y-%m-%d")
+                   + timedelta(seconds=a_segundos(entrada[0]["hora"]) or 0))
             if (ahora - ini).total_seconds() > HORAS_JORNADA_ABIERTA * 3600:
                 return hoy                               # se quedo abierta, se abandona
         return fecha
@@ -493,16 +588,69 @@ class Datos(object):
             raise ValueError(
                 "Ya estan las cuatro marcas del dia %s. Si algo quedo mal, "
                 "corrigelo en la pestana Jornadas." % est["fecha"])
+        hora = ahora.strftime("%H:%M:%S")
+        registrado = ahora.strftime("%Y-%m-%d %H:%M:%S")
         self.cx.execute(
-            "INSERT INTO marcas (trabajador_id, fecha, tipo, hora, origen, registrado_en) "
-            "VALUES (?,?,?,?,?,?)",
-            (tid, est["fecha"], est["proxima"], ahora.strftime("%H:%M"),
-             origen, ahora.strftime("%Y-%m-%d %H:%M:%S")))
+            "INSERT INTO marcas (trabajador_id, fecha, tipo, hora, origen, "
+            "registrado_en, sello) VALUES (?,?,?,?,?,?,?)",
+            (tid, est["fecha"], est["proxima"], hora, origen, registrado,
+             self.sello_de(tid, est["fecha"], est["proxima"], hora, registrado)))
         self.cx.commit()
         r = {"tipo": est["proxima"], "etiqueta": ETIQUETAS[est["proxima"]],
-             "hora": ahora.strftime("%H:%M"), "fecha": est["fecha"]}
+             "hora": hora, "fecha": est["fecha"]}
         r["correo"] = self.encolar_aviso(tid, r, ahora)
         return r
+
+    # -- integridad y bitacora (Res. Ex. N°38, arts. 8 y 41) --------------
+    def sello_de(self, tid, fecha, tipo, hora, registrado_en):
+        """SHA-256 de la marcacion, con el RUT del trabajador y del empleador."""
+        t = self.trabajador(tid) or {}
+        return DT.sello_marcacion(t.get("rut", ""), fecha, tipo, hora,
+                                  self.config().get("rut_empleador", ""),
+                                  registrado_en)
+
+    def sello_valido(self, marca):
+        """
+        Dice si la marca sigue cuadrando con su sello.
+
+        Una marca sin sello (de antes de la version 2.0) no se da por buena
+        ni por mala: devuelve None, y asi se muestra.
+        """
+        if not marca.get("sello"):
+            return None
+        return marca["sello"] == self.sello_de(
+            marca["trabajador_id"], marca["fecha"], marca["tipo"],
+            marca["hora"], marca["registrado_en"])
+
+    def anotar(self, accion, tid, fecha, tipo="", antes="", despues="",
+               motivo="", cuando=None):
+        """
+        Deja constancia de una intervencion sobre los registros.
+
+        El articulo 41 letra a) exige que toda alteracion quede visible. Esta
+        tabla es lo que permite mostrarla: nada la borra, ni siquiera borrar
+        el dia al que se refiere.
+        """
+        self.cx.execute(
+            "INSERT INTO bitacora (cuando, accion, trabajador_id, fecha, tipo, "
+            "antes, despues, motivo) VALUES (?,?,?,?,?,?,?,?)",
+            ((cuando or datetime.now()).strftime("%Y-%m-%d %H:%M:%S"), accion,
+             tid, fecha, tipo, str(antes), str(despues), motivo))
+        self.cx.commit()
+
+    def bitacora_de(self, tid=None, fecha=None):
+        sql, datos = "SELECT * FROM bitacora WHERE 1=1", []
+        if tid is not None:
+            sql += " AND trabajador_id=?"; datos.append(tid)
+        if fecha is not None:
+            sql += " AND fecha=?"; datos.append(fecha)
+        return [dict(f) for f in self.cx.execute(sql + " ORDER BY id", datos)]
+
+    def dia_intervenido(self, tid, fecha):
+        """Si este dia tiene correcciones, para marcarlo en pantalla."""
+        return bool(self.cx.execute(
+            "SELECT 1 FROM bitacora WHERE trabajador_id=? AND fecha=? LIMIT 1",
+            (tid, fecha)).fetchone())
 
     # -- aviso por correo -----------------------------------------------
     #  Marcar y avisar son cosas distintas a proposito: la marca se guarda
@@ -526,8 +674,48 @@ class Datos(object):
             return None
 
     def texto_aviso(self, trabajador, marca, ahora=None):
-        """Lo que le llega al trabajador: que marco, a que hora, y como va su dia."""
+        """
+        Lo que le llega al trabajador cuando marca.
+
+        Si estan los datos que exige el articulo 13 de la Resolucion Exenta
+        N°38 (RUT del trabajador, razon social y RUT del empleador), sale el
+        comprobante formal. Si todavia no estan, sale el aviso simple de
+        siempre con una nota al pie: asi el local no se queda sin aviso
+        mientras completa los datos, pero sabe que aun no cumple.
+        """
         cfg = self.config()
+        try:
+            empleador = dict(cfg, rut=cfg.get("rut_empleador", ""))
+            asunto, cuerpo = DT.comprobante(
+                dict(marca, sello=self.sello_actual(trabajador["id"], marca)),
+                trabajador, empleador, marca["etiqueta"])
+            return asunto, cuerpo + "\n" + self._resumen_del_dia(trabajador, ahora)
+        except ValueError:
+            pass                       # faltan datos: sigue el aviso simple
+        return self._aviso_simple(cfg, trabajador, marca, ahora)
+
+    def sello_actual(self, tid, marca):
+        """El sello guardado de esa marcacion, para ponerlo en el comprobante."""
+        f = self.cx.execute(
+            "SELECT sello FROM marcas WHERE trabajador_id=? AND fecha=? AND tipo=?",
+            (tid, marca["fecha"], marca["tipo"])).fetchone()
+        return f["sello"] if f else ""
+
+    def _resumen_del_dia(self, trabajador, ahora=None):
+        """Como va el dia. No lo exige la norma, pero al trabajador le sirve."""
+        est = self.estado(trabajador["id"], ahora)
+        hechas = dict((m["tipo"], m["hora"]) for m in est["marcas"])
+        l = ["", "TUS MARCAS DE ESE DIA"]
+        for tipo in TIPOS:
+            l.append("   %-20s %s" % (ETIQUETAS[tipo], hechas.get(tipo, "--:--:--")))
+        if est["completa"]:
+            l.append("   Jornada completa: %s horas trabajadas."
+                     % hhmm_txt(est["horas"]))
+        elif est["horas"]:
+            l.append("   Llevas %s horas trabajadas." % hhmm_txt(est["horas"]))
+        return "\n".join(l)
+
+    def _aviso_simple(self, cfg, trabajador, marca, ahora=None):
         negocio = cfg.get("negocio", NEGOCIO_DEF)
         est = self.estado(trabajador["id"], ahora)
         asunto = "%s a las %s - %s" % (marca["etiqueta"], marca["hora"], negocio)
@@ -708,6 +896,7 @@ class Datos(object):
         if not m:
             raise ValueError("Esa marca ya no existe.")
         m = dict(m)
+        antes = dict(m)
         self._no_pagado(m["trabajador_id"], m["fecha"])
         if hora is not None:
             limpia = normalizar_hora(hora)
@@ -724,9 +913,17 @@ class Datos(object):
                 raise ValueError("Ese dia ya tiene una marca de %s. "
                                  "Corrige o borra la otra primero." % ETIQUETAS[tipo])
             m["tipo"] = tipo
-        self.cx.execute("UPDATE marcas SET hora=?, tipo=?, origen='manual' WHERE id=?",
-                        (m["hora"], m["tipo"], mid))
+        registrado = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        nuevo_sello = self.sello_de(m["trabajador_id"], m["fecha"], m["tipo"],
+                                    m["hora"], registrado)
+        self.cx.execute("UPDATE marcas SET hora=?, tipo=?, origen='manual', "
+                        "registrado_en=?, sello=? WHERE id=?",
+                        (m["hora"], m["tipo"], registrado, nuevo_sello, mid))
         self.cx.commit()
+        # Art. 41 a): la correccion tiene que quedar visible, no escondida.
+        self.anotar("edita", m["trabajador_id"], m["fecha"], m["tipo"],
+                    antes="%s %s" % (antes["tipo"], antes["hora"]),
+                    despues="%s %s" % (m["tipo"], m["hora"]))
 
     def agregar_marca(self, tid, fecha, tipo, hora):
         """Para cuando a alguien se le olvido marcar y hay que agregarla."""
@@ -740,19 +937,25 @@ class Datos(object):
         self._no_pagado(tid, fecha)
         if any(m["tipo"] == tipo for m in self.marcas_de(tid, fecha)):
             raise ValueError("Ese dia ya tiene una marca de %s." % ETIQUETAS[tipo])
+        registrado = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.cx.execute(
-            "INSERT INTO marcas (trabajador_id, fecha, tipo, hora, origen, registrado_en) "
-            "VALUES (?,?,?,?,'manual',?)",
-            (tid, fecha, tipo, hora, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            "INSERT INTO marcas (trabajador_id, fecha, tipo, hora, origen, "
+            "registrado_en, sello) VALUES (?,?,?,?,'manual',?,?)",
+            (tid, fecha, tipo, hora, registrado,
+             self.sello_de(tid, fecha, tipo, hora, registrado)))
         self.cx.commit()
+        self.anotar("agrega", tid, fecha, tipo, despues=hora,
+                    motivo="marcacion agregada a mano")
 
     def borrar_marca(self, mid):
-        m = self.cx.execute("SELECT trabajador_id, fecha FROM marcas WHERE id=?",
-                            (mid,)).fetchone()
+        m = self.cx.execute("SELECT * FROM marcas WHERE id=?", (mid,)).fetchone()
         if m:
             self._no_pagado(m["trabajador_id"], m["fecha"])
         self.cx.execute("DELETE FROM marcas WHERE id=?", (mid,))
         self.cx.commit()
+        if m:
+            self.anotar("borra", m["trabajador_id"], m["fecha"], m["tipo"],
+                        antes=m["hora"], motivo="marcacion eliminada")
 
     def borrar_dia(self, tid, fecha):
         """
@@ -763,9 +966,14 @@ class Datos(object):
         que no desaparezca por accidente un pago ya registrado.
         """
         self._no_pagado(tid, fecha)
+        habia = self.marcas_de(tid, fecha)
         cur = self.cx.execute("DELETE FROM marcas WHERE trabajador_id=? AND fecha=?",
                               (tid, fecha))
         self.cx.commit()
+        if habia:
+            self.anotar("borra", tid, fecha, motivo="dia completo eliminado",
+                        antes=", ".join("%s %s" % (m["tipo"], m["hora"])
+                                        for m in habia))
         return cur.rowcount
 
     # -- pagos ---------------------------------------------------------

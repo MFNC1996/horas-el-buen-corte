@@ -186,7 +186,7 @@ if sal:
     v.datos.editar_marca(sal[0]["id"], hora="23:00")
     check("la correccion se guarda",
           [m for m in v.datos.marcas_de(tid, fecha)
-           if m["tipo"] == "salida"][0]["hora"] == "23:00")
+           if m["tipo"] == "salida"][0]["hora"] == "23:00:00")
     check("y queda anotada como corregida a mano",
           [m for m in v.datos.marcas_de(tid, fecha)
            if m["tipo"] == "salida"][0]["origen"] == "manual")
